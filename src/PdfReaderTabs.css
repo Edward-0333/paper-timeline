@@ -1,0 +1,17 @@
+/* Keep the tab row aligned with navigation; its scrollbar sits below the row. */
+.reader-tabs-bar { display: flex; align-items: center; flex: 1; min-width: 0; height: 32px; }
+.reader-tabs { display: flex; align-self: flex-start; min-width: 0; flex: 1; gap: 6px; padding: 0 0 3px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; scrollbar-color: #c7d2e5 transparent; }
+.home-nav button, .reader-tab { height: 32px; box-sizing: border-box; border: 0; border-radius: 6px; background: transparent; color: #7a8798; font: inherit; font-size: 12px; line-height: 20px; }
+.home-nav button[aria-pressed=true], .reader-tab.is-active { background: #edf2fc; color: #345fc1; }
+.home-nav button:hover:not(:disabled), .reader-tab:hover { background: #f0f3f9; color: #345fc1; }
+.home-nav button[aria-pressed=true]:hover:not(:disabled), .reader-tab.is-active:hover { background: #e5edfc; }
+.reader-tab { display: flex; align-items: center; width: 200px; flex: 0 0 200px; }
+.reader-tab.is-collection { width: max-content; flex: 0 0 auto; }
+.reader-tab-select { display: flex; min-width: 0; flex: 1; align-items: center; padding: 0 8px 0 13px; height: 100%; color: inherit; background: transparent; border: 0; border-radius: 6px; cursor: pointer; font: inherit; text-align: left; }
+.reader-tab-title { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reader-tab-close { display: grid; place-items: center; flex: 0 0 24px; height: 24px; margin-right: 3px; padding: 0; color: inherit; background: transparent; border: 0; border-radius: 4px; cursor: pointer; }
+.reader-tab-close:hover { background: #dce6f8; color: #345fc1; }
+.home-nav button:focus-visible, .reader-tab-select:focus-visible, .reader-tab-close:focus-visible { outline: 2px solid #6d91ee; outline-offset: -2px; }
+.home-nav button:disabled, .reader-tab-select:disabled, .reader-tab-close:disabled { cursor: wait; }
+.reader-panel { display: flex; flex: 1; min-height: 0; min-width: 0; }
+.reader-closing { position: absolute; inset: 0; z-index: 100; background: #ffffffb3; display: grid; place-items: center; color: #4d607d; }

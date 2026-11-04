@@ -1,0 +1,24 @@
+node_modules/
+dist/
+dist-electron/
+release/
+.cache/
+.test-data/
+.generated/
+library/
+test-results/
+*.log
+.mineru-env/
+
+# Local libraries, imports, machine settings and test artifacts
+/imports/
+/import-reports/
+/test-data/
+/%SystemDrive%/
+/library-location.json
+llm-config.bin*
+.ai-session.json*
+.env
+.env.*
+!.env.example
+*.tsbuildinfo

@@ -1,0 +1,33 @@
+.model-config-card { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
+.model-config-summary { min-width: 0; }
+.model-list { min-width: 0; border: 0; padding: 0; margin: 0 0 12px; }
+.model-list legend { color: var(--secondary); font-size: 12px; margin-bottom: 10px; }
+.model-settings .model-list label { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; }
+.model-settings .model-list label.highlighted { border-color: var(--accent); background: #f4f7ff; }
+.model-list input[type=radio] { width: 16px; height: 16px; margin: 0; flex-shrink: 0; accent-color: var(--accent); }
+.model-list .model-row-info { min-width: 0; flex: 1; margin: 0; color: var(--text); overflow-wrap: anywhere; }
+.model-row-info strong, .model-row-info small { display: block; }
+.model-row-info strong { font-size: 13px; }
+.model-row-info small { color: var(--muted); font-size: 11px; margin-top: 3px; }
+.model-current { color: #28734a; white-space: nowrap; }
+.model-add { margin-right: auto; }
+.model-config-title { display: flex; align-items: center; gap: 14px; }
+.model-config-title h2 { margin: 0; }
+.model-config-summary > p { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 11px 0 0; overflow-wrap: anywhere; }
+.model-config-summary > p strong { font-weight: 550; color: #40536e; }
+.model-config-summary > p code { font: inherit; color: #8190a4; overflow-wrap: anywhere; }
+.model-config-card > button { flex-shrink: 0; }
+.model-save-notice { display: inline-flex; align-items: center; gap: 5px; color: #28805b; font-size: 11px; margin-top: 10px; }
+.model-settings-intro { margin: 0 0 20px; font-size: 12px; color: var(--muted); line-height: 1.7; }
+.model-key-field { position: relative; }
+.model-key-field input { padding-right: 42px; }
+.model-key-field > button { position: absolute; right: 6px; top: 7px; }
+.model-settings .model-no-key { display: flex; gap: 8px; align-items: center; margin: 0 0 14px; line-height: 1.6; cursor: pointer; }
+.model-settings .model-no-key input { width: 14px; height: 14px; margin: 0; padding: 0; flex-shrink: 0; accent-color: var(--accent); }
+.model-settings-help { color: var(--muted); font-size: 11px; line-height: 1.7; margin: -5px 0 15px; }
+.model-settings .model-clear { color: #a25750; margin-right: auto; }
+.model-test-result { display: flex; flex-wrap: wrap; gap: 5px 12px; font-size: 12px; line-height: 1.7; padding: 10px 12px; border-radius: 6px; overflow-wrap: anywhere; }
+.model-test-result.success { background: #edf8f0; color: #28734a; }
+.model-test-result.failure { background: #fff4f1; color: #a55344; }
+.model-test-result > span { font-size: 11px; }
+@media (max-width: 800px) { .model-config-card { align-items: flex-start; flex-wrap: wrap; gap: 18px; } }

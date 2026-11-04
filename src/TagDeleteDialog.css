@@ -1,0 +1,8 @@
+.edit-modal.tag-delete-dialog { width: 460px; padding: 0; color: var(--text); }
+.tag-delete-dialog:not([open]) { display: none; }
+.tag-delete-dialog::backdrop { background: #00000047; }
+.tag-delete-dialog .modal-fields { padding-bottom: 22px; }
+.tag-delete-name { margin: 0 0 12px; font-size: 16px; font-weight: 600; line-height: 1.7; overflow-wrap: anywhere; }
+.tag-delete-paper { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; margin: 0 0 14px; font-size: 12px; line-height: 1.7; color: var(--secondary); overflow-wrap: anywhere; }
+.tag-delete-dialog #tag-delete-description { margin: 0; color: var(--secondary); font-size: 12px; line-height: 1.8; }
+.tag-delete-dialog .form-error { margin-bottom: 0; }

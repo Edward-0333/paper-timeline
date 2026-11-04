@@ -1,0 +1,66 @@
+appId: app.papertimeline.desktop
+productName: Paper Timeline
+electronDist: node_modules/electron/dist
+npmRebuild: false
+directories:
+  output: release
+extraFiles:
+  - from: dist/vendor/vditor/licenses
+    to: note-licenses
+  - from: docs/markdown-note-guide.md
+    to: Markdown笔记说明.md
+  - from: node_modules/streamdown/LICENSE
+    to: chat-licenses/streamdown-Apache-2.0.txt
+  - from: node_modules/@streamdown/code/LICENSE
+    to: chat-licenses/streamdown-code-Apache-2.0.txt
+  - from: node_modules/@streamdown/math/LICENSE
+    to: chat-licenses/streamdown-math-Apache-2.0.txt
+  - from: node_modules/@streamdown/cjk/LICENSE
+    to: chat-licenses/streamdown-cjk-Apache-2.0.txt
+  - from: node_modules/katex/LICENSE
+    to: chat-licenses/katex-MIT.txt
+  - from: node_modules/shiki/LICENSE
+    to: chat-licenses/shiki-MIT.txt
+  - from: node_modules/remark-gfm/license
+    to: chat-licenses/remark-gfm-MIT.txt
+  - from: node_modules/ai/LICENSE
+    to: agent-licenses/ai-Apache-2.0.txt
+  - from: node_modules/@ai-sdk/openai-compatible/LICENSE
+    to: agent-licenses/openai-compatible-Apache-2.0.txt
+  - from: node_modules/@ai-sdk/openai/LICENSE
+    to: agent-licenses/openai-Apache-2.0.txt
+  - from: node_modules/zod/LICENSE
+    to: agent-licenses/zod-MIT.txt
+  - from: node_modules/@napi-rs/canvas/LICENSE
+    to: agent-licenses/canvas-MIT.txt
+  - from: docs/library-layout-guide.md
+    to: 文献库目录说明.md
+  - from: docs/library-ai-index-guide.md
+    to: docs/library-ai-index-guide.md
+  - from: docs/model-api-guide.md
+    to: 大模型配置说明.md
+  - from: node_modules/fflate/LICENSE
+    to: mineru-licenses/fflate-MIT.txt
+  - from: docs/mineru-guide.md
+    to: MinerU全文转换说明.md
+  - from: THIRD_PARTY_NOTICES.md
+    to: THIRD_PARTY_NOTICES.md
+  - from: dist/reader-assets/licenses
+    to: reader-licenses
+  - from: docs/pdf-reader-guide.md
+    to: PDF阅读器说明.md
+  - from: AGENTS.md
+    to: AGENTS.md
+  - from: PaperAI.cmd
+    to: PaperAI.cmd
+  - from: ai
+    to: ai
+files:
+  - dist/**
+  - dist-electron/**
+  - package.json
+asarUnpack:
+  - node_modules/@napi-rs/**
+win:
+  target: dir
+  signAndEditExecutable: false

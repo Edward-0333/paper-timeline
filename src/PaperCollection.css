@@ -1,0 +1,4 @@
+.collection-page { display: flex; flex: 1; min-height: 0; min-width: 0; }
+.collection-panel { display: grid; grid-template-columns: minmax(0, 1fr) 380px; grid-template-rows: auto minmax(0, 1fr); flex: 1; min-height: 0; min-width: 0; }
+.collection-panel .paper-list { grid-column: 1; }
+.collection-panel .detail-panel { grid-column: 2; }

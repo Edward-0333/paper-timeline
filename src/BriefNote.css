@@ -1,0 +1,13 @@
+.brief-note-section { margin: 24px 0; padding: 16px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.brief-note-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.brief-note-heading h3 { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 500; margin: 0; color: var(--secondary); }
+.brief-note-heading button { flex-shrink: 0; font-size: 11px; }
+.brief-note-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.85; color: var(--text); margin: 12px 0 0; }
+.brief-note-empty { color: var(--muted); font-size: 11px; line-height: 1.7; margin: 12px 0 0; }
+.edit-modal.brief-note-dialog { width: 490px; max-width: calc(100vw - 40px); padding: 0; color: var(--text); }
+.brief-note-dialog:not([open]) { display: none; }
+.brief-note-dialog::backdrop { background: #00000047; }
+.brief-note-dialog > form { display: flex; flex-direction: column; min-height: 0; }
+.brief-note-paper { margin: 0 0 20px; color: var(--secondary); font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.brief-note-dialog textarea { resize: vertical; min-height: 110px; box-sizing: border-box; }
+.brief-note-help { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 10px; color: var(--muted); margin: -8px 0 15px; }

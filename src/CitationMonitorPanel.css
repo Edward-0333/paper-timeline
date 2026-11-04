@@ -1,0 +1,20 @@
+.citation-monitor-panel { margin: 22px 0; padding: 15px; border: 1px solid #e5e9e6; border-radius: 12px; background: #fafcfb; }
+.citation-monitor-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.citation-monitor-heading h3 { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 13px; font-weight: 650; color: #35483b; }
+.citation-monitor-heading p { margin: 5px 0 0; font-size: 11px; color: #7b827e; }
+.citation-monitor-switch { flex: 0 0 74px; width: 74px; height: 34px; position: relative; padding: 0; border: 1px solid #dc927d; border-radius: 20px; background: #e98e76; color: white; box-shadow: inset 0 1px 3px #00000010, 0 2px 5px #d88f7924; cursor: pointer; transition: background .18s, border-color .18s; touch-action: manipulation; }
+.citation-monitor-switch.is-on { background: #72c963; border-color: #65b957; box-shadow: inset 0 1px 3px #00000008, 0 2px 5px #65b95724; }
+.citation-monitor-switch-knob { display: grid; place-items: center; position: absolute; width: 28px; height: 28px; left: 2px; top: 2px; border-radius: 50%; background: linear-gradient(145deg, #fff, #f4f5f4); border: 1px solid #ffffffc0; box-shadow: 0 1px 4px #00000024; color: #65746a; transition: transform .18s; }
+.citation-monitor-switch.is-on .citation-monitor-switch-knob { transform: translateX(40px); }
+.citation-monitor-switch-label { position: absolute; left: 35px; top: 0; line-height: 32px; font-size: 10px; font-weight: 750; letter-spacing: .4px; }
+.citation-monitor-switch.is-on .citation-monitor-switch-label { left: 12px; }
+.citation-monitor-switch:focus-visible { outline: 2px solid #477dcd; outline-offset: 3px; }
+.citation-monitor-switch:disabled { cursor: wait; opacity: .7; }
+.citation-monitor-status { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 5px; margin: 14px 0 8px; font-size: 11px; color: #59675f; }
+.citation-monitor-status > span { display: inline-flex; align-items: center; gap: 5px; }
+.citation-monitor-time { margin: 4px 0; font-size: 10px; color: #838b86; }
+.citation-monitor-warning { margin: 7px 0; font-size: 11px; color: #986830; line-height: 1.6; overflow-wrap: anywhere; }
+.citation-monitor-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 7px; margin-top: 12px; padding-top: 10px; border-top: 1px solid #e9edea; }
+.citation-monitor-footer small { color: #8b928e; font-size: 10px; }
+.citation-monitor-footer .text-button { padding: 0; font-size: 10px; gap: 4px; color: #687e6d; }
+@media (prefers-reduced-motion: reduce) { .citation-monitor-switch, .citation-monitor-switch-knob { transition: none; } }

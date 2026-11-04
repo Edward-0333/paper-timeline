@@ -1,0 +1,15 @@
+.library-settings { width: 610px; }
+.storage-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; }
+.storage-heading span { font-size: 12px; color: var(--muted); }
+.library-settings textarea[readonly] { background: var(--surface-subtle); resize: none; font-size: 12px; overflow-wrap: anywhere; }
+.storage-transfer-help { margin: 17px 0; color: var(--secondary); font-size: 12px; line-height: 1.85; }
+.storage-options { display: flex; flex-direction: column; gap: 9px; margin-bottom: 18px; }
+.storage-option { display: flex; align-items: flex-start; gap: 13px; width: 100%; text-align: left; padding: 14px; background: #fff; border: 1px solid var(--border); border-radius: 7px; color: var(--secondary); }
+.storage-option > svg { margin-top: 2px; color: var(--accent); }
+.storage-option strong { display: block; margin-bottom: 5px; font-size: 13px; font-weight: 500; }
+.storage-option small { display: block; color: var(--muted); font-size: 12px; line-height: 1.65; }
+.storage-option:hover, .storage-option[aria-pressed=true] { background: var(--surface-subtle); border-color: var(--accent); }
+.storage-selection { background: #f2f6ff; border: 1px solid #dce5fa; padding: 14px; border-radius: 7px; margin-bottom: 18px; font-size: 12px; }
+.storage-selection strong { font-weight: 500; }
+.storage-selection p { word-break: break-all; margin: 9px 0; line-height: 1.7; }
+.storage-selection small, .storage-note { color: var(--muted); font-size: 12px; line-height: 1.7; }

@@ -1,0 +1,15 @@
+@layer theme, utilities;
+@import "tailwindcss/theme.css" layer(theme) prefix(ptmd);
+@import "tailwindcss/utilities.css" layer(utilities) prefix(ptmd);
+
+@theme inline {
+  --color-background: #ffffff;
+  --color-foreground: #303a4b;
+  --color-muted: #f1f4f8;
+  --color-muted-foreground: #768397;
+  --color-border: #dce3ed;
+  --color-sidebar: #f6f8fb;
+  --color-primary: #376bc7;
+  --color-primary-foreground: #ffffff;
+  --color-ring: #7395e8;
+}

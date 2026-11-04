@@ -1,0 +1,46 @@
+.citations-page { display: grid; grid-template-columns: minmax(0, 1fr) 340px; grid-template-rows: auto minmax(0, 1fr) auto; flex: 1; min-height: 0; min-width: 0; }
+.citations-tools { justify-content: space-between; }
+.citations-heading { min-width: 0; }
+.citations-heading h1 { display: flex; align-items: baseline; gap: 12px; margin: 0; font-size: 16px; font-weight: 600; }
+.citations-heading h1 span { font-size: 12px; color: var(--muted); font-weight: 400; white-space: nowrap; }
+.citations-heading p { margin: 6px 0 0; color: var(--secondary); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.citations-content { min-width: 0; min-height: 0; overflow: auto; background: #fff; }
+.citations-table { width: 100%; min-width: 760px; border-collapse: separate; border-spacing: 0; table-layout: fixed; font-size: 12px; }
+.citation-authors-col { width: 20%; }
+.citation-date-col { width: 106px; }
+.citation-venue-col { width: 19%; }
+.citation-library-col { width: 132px; }
+.citations-table th { position: sticky; top: 0; z-index: 1; text-align: left; font-weight: 400; color: var(--muted); background: #f7f8fa; border-bottom: 1px solid var(--line); }
+.citations-table th, .citations-table td { padding: 12px 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.citations-table td { border-bottom: 1px solid #f0f2f5; }
+.citations-table tbody tr { cursor: pointer; }
+.citations-table tbody tr:hover { background: #f5f8ff; }
+.citations-table tr[aria-selected=true] { background: #edf2fc; color: #294f9e; }
+.citations-table tr:focus-visible { outline: 2px solid #6d91ee; outline-offset: -2px; }
+.citation-title { font-weight: 500; }
+.citation-add-button, .citation-in-library { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; font-size: 11px; }
+.citation-add-button { padding: 5px 7px; border-radius: 5px; border: 1px solid #d4def3; background: #f7f9ff; color: #345fc1; cursor: pointer; }
+.citation-add-button:hover:not(:disabled) { background: #e8efff; border-color: #9eb6ec; }
+.citation-add-button:disabled { opacity: .6; cursor: wait; }
+.citation-add-button:focus-visible { outline: 2px solid #6d91ee; outline-offset: 1px; }
+.citation-in-library { color: #39835c; }
+.citation-add-error { display: flex; align-items: flex-start; gap: 7px; padding: 12px 18px; margin: 0; color: #a43535; background: #fff3f1; border-bottom: 1px solid #f1d3cf; font-size: 12px; }
+.citation-add-error svg { flex-shrink: 0; margin-top: 1px; }
+.edit-modal.citation-confirm { width: 460px; padding: 0; color: var(--text); }
+.citation-confirm:not([open]) { display: none; }
+.citation-confirm::backdrop { background: #00000047; }
+.citation-confirm .modal-fields { padding-bottom: 20px; }
+.citation-confirm .citation-confirm-paper { margin: 0 0 12px; font-size: 14px; font-weight: 500; line-height: 1.7; overflow-wrap: anywhere; }
+.citation-confirm #citation-confirm-description { margin: 0; color: var(--secondary); font-size: 12px; line-height: 1.8; }
+.citation-details { min-width: 0; min-height: 0; overflow: auto; padding: 24px; background: #fff; border-left: 1px solid var(--line); }
+.citation-details .eyebrow { color: var(--muted); font-size: 11px; }
+.citation-details h2 { font-size: 17px; line-height: 1.6; margin: 12px 0; overflow-wrap: anywhere; }
+.citation-detail-authors { color: var(--secondary); font-size: 12px; line-height: 1.8; }
+.citation-details dl { font-size: 12px; line-height: 1.7; margin: 24px 0; }
+.citation-details dt { color: var(--muted); margin-top: 14px; }
+.citation-details dd { margin: 3px 0 0; overflow-wrap: anywhere; user-select: text; }
+.citation-details h3 { font-size: 13px; font-weight: 500; }
+.citation-abstract { font-size: 12px; color: var(--secondary); line-height: 1.9; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.citations-footer { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 24px; min-height: 44px; background: #fff; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; }
+.citations-pagination { display: flex; align-items: center; gap: 10px; font-variant-numeric: tabular-nums; }
+@media (max-width: 1100px) { .citations-page { grid-template-columns: minmax(0, 1fr) 290px; } .citation-details { padding: 20px; } }
