@@ -95,6 +95,7 @@ export class LibraryAiIndex {
     directory: this.rel(paths.directory), pathBase: 'library-root',
     files: { pdf: await this.ref(paths.pdf), markdownNote: await this.ref(paper.markdownNote ? paths.markdown : null),
       annotations: await this.ref(paths.annotations), chat: await this.ref(join(paths.directory, 'chat.json')),
+      chatContext: await this.ref(join(paths.directory, 'chat-context.json')),
       citations: await this.ref(join(paths.citations, 'citations.json')) }, parsed: await this.parsed(paper, forceScan) };
   }
   private async publish(path: string, content: string, json = false) {

@@ -1,13 +1,21 @@
 import { randomUUID } from 'node:crypto';
 import { lstat, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { emptyModelConfiguration, modelBaseUrl, type ModelConfiguration, type ModelConfigurationInput } from '../shared/model-settings';
+import { emptyModelConfiguration, modelBaseUrl, type ModelConfiguration, type ModelConfigurationInput, type ModelProfile } from '../shared/model-settings';
 import { probeModelConnection, type ConnectionOptions } from './model-connectivity';
 import { requestModelChat, type ChatOptions } from './model-chat';
-import { validateChatRequest, validChatRequestId, type ModelChatContext, type ModelChatRequest, type ModelChatResult, type StoredChatMessage } from '../shared/model-chat';
+import { validateChatRequest, validChatRequestId, validContextWindow, type ChatCompaction, type ModelChatContext, type ModelChatRequest, type ModelChatResult, type StoredChatMessage } from '../shared/model-chat';
 import type { PaperAgentAccess } from './paper-agent-tools';
 
-interface ModelSecret { id: string; name: string; baseUrl: string; model: string; apiKey: string; updatedAt: string }
+interface ModelSecret { id: string; name: string; baseUrl: string; model: string; apiKey: string; updatedAt: string; contextWindowTokens?: number }
+export interface BoundModelTarget { id: string; name: string; baseUrl: string; model: string; apiKey: string; contextWindowTokens?: number }
+export class StaleModelConfigurationError extends Error {
+  constructor() { super('模型配置已变化，请重新查询后确认。'); }
+}
+interface CompactionStore {
+  loadCompaction(paperId: string): Promise<ChatCompaction | null>;
+  saveCompaction(paperId: string, state: ChatCompaction): Promise<void>;
+}
 interface ModelStore { version: 2; activeId: string | null; profiles: ModelSecret[] }
 const MAX_PROFILES = 32;
 export interface ModelCipher {
@@ -20,14 +28,16 @@ const text = (value: unknown, label: string, max: number) => {
   return value.trim();
 };
 function validateInput(value: ModelConfigurationInput, testing = false) {
-  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(k => !['profileId', 'name', 'baseUrl', 'model', 'apiKey', 'withoutApiKey'].includes(k))
+  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(k => !['profileId', 'name', 'baseUrl', 'model', 'apiKey', 'withoutApiKey', 'contextWindowTokens'].includes(k))
     || (value.profileId != null && typeof value.profileId !== 'string')
     || typeof value.withoutApiKey !== 'boolean' || (value.apiKey !== undefined && typeof value.apiKey !== 'string')) throw new Error('大模型配置格式不正确');
+  if (value.contextWindowTokens !== undefined && !validContextWindow(value.contextWindowTokens)) throw new Error('上下文容量需为 8192–2000000 的整数');
   return { name: text(testing && typeof value.name === 'string' && !value.name.trim() ? '连通性测试' : value.name, '配置名称', 80), baseUrl: modelBaseUrl(value.baseUrl), model: text(value.model, '模型名称', 256),
-    apiKey: value.apiKey?.trim() || '', withoutApiKey: value.withoutApiKey };
+    apiKey: value.apiKey?.trim() || '', withoutApiKey: value.withoutApiKey, contextWindowTokens: value.contextWindowTokens };
 }
 function validateStored(value: ModelSecret) {
-  if (!value || typeof value.id !== 'string' || !/^(legacy|[a-f0-9-]{36})$/.test(value.id) || Object.keys(value).some(k => !['id', 'name', 'baseUrl', 'model', 'apiKey', 'updatedAt'].includes(k))
+  if (!value || typeof value.id !== 'string' || !/^(legacy|[a-f0-9-]{36})$/.test(value.id) || Object.keys(value).some(k => !['id', 'name', 'baseUrl', 'model', 'apiKey', 'updatedAt', 'contextWindowTokens'].includes(k))
+    || (value.contextWindowTokens !== undefined && !validContextWindow(value.contextWindowTokens))
     || typeof value.apiKey !== 'string' || value.apiKey.length > 8192 || /[\x00-\x1f\x7f]/.test(value.apiKey)
     || typeof value.updatedAt !== 'string' || !Number.isFinite(Date.parse(value.updatedAt))) throw new Error('配置格式不正确');
   text(value.name, '配置名称', 80); text(value.model, '模型名称', 256); modelBaseUrl(value.baseUrl);
@@ -53,7 +63,7 @@ export class ModelSettings {
   private connectionTest?: { controller: AbortController; done: Promise<unknown> };
   private chats = new Map<string, { controller: AbortController; done: Promise<ModelChatResult>; paperId: string }>();
   constructor(private directory: string, private cipher: ModelCipher, private chatContext?: (paperId: string) => Promise<ModelChatContext>, private agentAccess?: (paperId: string) => PaperAgentAccess,
-    private saveChat?: (paperId: string, messages: StoredChatMessage[]) => Promise<void>) {}
+    private saveChat?: (paperId: string, messages: StoredChatMessage[]) => Promise<void>, private compactionStore?: CompactionStore) {}
   get file() { return join(this.directory, 'llm-config.bin'); }
   private async check() {
     for (const [path, directory] of [[this.directory, true], [this.file, false]] as const) {
@@ -83,6 +93,16 @@ export class ModelSettings {
     catch { throw new Error('无法读取或解密大模型配置，请重新打开设置；可清除配置后重新填写'); }
   }
   async status() { await this.writes.catch(() => {}); return summary(await this.read()); }
+  /** Main-process only. Bind credentials once, then release the settings write queue before running tools. */
+  async withActiveModel<T>(callback: (target: Readonly<BoundModelTarget>, redact: (text: string) => string) => Promise<T>): Promise<T> {
+    const store = await this.serialize(async () => structuredClone(await this.read()));
+    const selected = profileFor(store, undefined);
+    if (!selected) throw new Error('请先在个人首页选择 API 大模型，再发送消息。');
+    const secrets = [...new Set(store!.profiles.map(profile => profile.apiKey).filter(Boolean))].sort((a, b) => b.length - a.length);
+    const redact = (text: string) => secrets.reduce((value, key) => value.split(key).join('[已隐藏密钥]'), text);
+    return callback(Object.freeze({ id: selected.id, name: selected.name, baseUrl: selected.baseUrl, model: selected.model, apiKey: selected.apiKey,
+      contextWindowTokens: selected.contextWindowTokens }), redact);
+  }
   private serialize<T>(fn: () => Promise<T>): Promise<T> {
     const next = this.writes.catch(() => {}).then(fn); this.writes = next; return next;
   }
@@ -109,10 +129,11 @@ export class ModelSettings {
     try { return await done; } finally { if (this.connectionTest?.controller === controller) this.connectionTest = undefined; }
   }
   cancelConnectionTest() { this.connectionTest?.controller.abort(); }
-  async chat(input: ModelChatRequest, fetcher: typeof fetch, options: Omit<ChatOptions, 'context' | 'agent'> = {}): Promise<ModelChatResult> {
+  async chat(input: ModelChatRequest, fetcher: typeof fetch, options: Omit<ChatOptions, 'context' | 'agent' | 'compaction'> = {}): Promise<ModelChatResult> {
     const request = validateChatRequest(input);
     if (!request) return { ok: false, message: '消息格式或长度不正确，请缩短对话后重试。' };
     if (this.chats.has(request.requestId)) return { ok: false, message: '此消息正在生成回复，请等待或停止当前请求。' };
+    if (this.hasActiveChat(request.paperId)) return { ok: false, message: '这篇论文正在处理对话，请等待或停止后重试。' };
     if (this.chats.size >= 4) return { ok: false, message: '同时生成的对话过多，请等待其他回复完成后重试。' };
     const controller = new AbortController();
     const done = (async (): Promise<ModelChatResult> => {
@@ -131,13 +152,27 @@ export class ModelSettings {
         context = await this.chatContext(request.paperId);
       } catch { return { ok: false, message: '无法确认当前文献的工作目录，请重新打开文献后重试。' }; }
       if (controller.signal.aborted || options.signal?.aborted) return { ok: false, cancelled: true, message: '已停止生成。' };
-      const result = await requestModelChat(value, request, fetcher, { ...options, context, agent: this.agentAccess?.(request.paperId), signal: options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal });
-      // Persisted user turns receive the same credential redaction as model replies.
-      if (result.ok && value.apiKey) for (const message of request.messages) message.content = message.content.split(value.apiKey).join('[已隐藏密钥]');
+      // Use identical sanitized text for the archive, prefix hashes and model input.
+      if (value.apiKey) for (const message of request.messages) message.content = message.content.split(value.apiKey).join('[已隐藏密钥]');
+      if (this.saveChat) {
+        try { await this.saveChat(request.paperId, request.messages); }
+        catch { return { ok: false, message: '对话记录未能保存，尚未发送模型请求。请保留当前页面并检查资料文件夹；旧记录未被裁剪。' }; }
+      }
+      let compaction: ChatCompaction | null = null, contextWarning = '';
+      try { compaction = await this.compactionStore?.loadCompaction(request.paperId) ?? null; }
+      catch { contextWarning = '已有摘要文件无法读取，原文件已保留；本轮依据原始问答重新整理。'; }
+      if (controller.signal.aborted || options.signal?.aborted) return { ok: false, cancelled: true, message: '已停止生成。' };
+      const result = await requestModelChat(value, request, fetcher, { ...options, context, compaction, agent: this.agentAccess?.(request.paperId), signal: options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal });
+      let archived = true;
       if (result.ok && result.content && this.saveChat) {
         try { await this.saveChat(request.paperId, [...request.messages, { role: 'assistant', content: result.content, sources: result.sources, activity: result.activity }]); }
-        catch { result.historyWarning = '本次回答已完成，但对话记录保存失败，请保留当前页面并检查资料文件夹。'; }
+        catch { archived = false; result.historyWarning = '本次回答已完成，但对话记录保存失败，请保留当前页面并检查资料文件夹。'; }
       }
+      if (result.ok && archived && result.compaction && this.compactionStore && result.compaction !== compaction) {
+        try { await this.compactionStore.saveCompaction(request.paperId, result.compaction); }
+        catch { result.historyWarning = '对话已保留，但摘要保存失败；原摘要未被覆盖，请保留当前页面并检查资料文件夹。'; }
+      }
+      if (contextWarning) result.historyWarning = [contextWarning, result.historyWarning].filter(Boolean).join(' ');
       return result;
     })();
     this.chats.set(request.requestId, { controller, done, paperId: request.paperId });
@@ -157,29 +192,37 @@ export class ModelSettings {
       return this.write({ ...store, activeId: id });
     });
   }
-  save(input: ModelConfigurationInput, activate = true) {
+  save(input: ModelConfigurationInput, activate = true, guard?: { profile: ModelProfile; signal: AbortSignal }) {
     return this.serialize(async () => {
+      guard?.signal.throwIfAborted();
       if (typeof activate !== 'boolean') throw new Error('模型启用参数不正确');
       const store = await this.read();
-      const { previous, name, baseUrl, model, apiKey } = this.resolveInput(input, store);
+      if (guard) {
+        const current = summary(store).profiles.find(profile => profile.id === input.profileId);
+        if (!current || current.id !== guard.profile.id || JSON.stringify(current) !== JSON.stringify(guard.profile)) throw new StaleModelConfigurationError();
+      }
+      const { previous, name, baseUrl, model, apiKey, contextWindowTokens } = this.resolveInput(input, store);
       const profiles = store?.profiles.slice() ?? [];
-      const next = { id: previous?.id ?? randomUUID(), name, baseUrl, model, apiKey, updatedAt: new Date().toISOString() };
+      const next = { id: previous?.id ?? randomUUID(), name, baseUrl, model, apiKey,
+        ...((contextWindowTokens ?? previous?.contextWindowTokens) === undefined ? {} : { contextWindowTokens: contextWindowTokens ?? previous?.contextWindowTokens }),
+        updatedAt: new Date(Math.max(Date.now(), previous ? Date.parse(previous.updatedAt) + 1 : 0)).toISOString() };
       if (previous) profiles[profiles.indexOf(previous)] = next;
       else {
         if (profiles.length >= MAX_PROFILES) throw new Error('最多可保存 32 套模型配置');
         profiles.push(next);
       }
-      return this.write({ version: 2, activeId: activate ? next.id : store?.activeId ?? null, profiles });
+      guard?.signal.throwIfAborted();
+      return this.write({ version: 2, activeId: activate ? next.id : store?.activeId ?? null, profiles }, guard?.signal);
     });
   }
-  private async write(next: ModelStore) {
+  private async write(next: ModelStore, signal?: AbortSignal) {
     if (!this.cipher.isEncryptionAvailable()) throw new Error('系统凭据加密不可用，未保存配置；请检查系统密钥服务');
     let encrypted: Buffer;
     try { encrypted = this.cipher.encryptString(JSON.stringify(next)); }
     catch { throw new Error('无法加密大模型配置，原有配置已保留'); }
     await this.check(); await mkdir(this.directory, { recursive: true });
     const temp = join(this.directory, 'llm-' + randomUUID() + '.tmp');
-    try { await writeFile(temp, encrypted, { flag: 'wx', mode: 0o600 }); await rename(temp, this.file); }
+    try { await writeFile(temp, encrypted, { flag: 'wx', mode: 0o600 }); signal?.throwIfAborted(); await rename(temp, this.file); }
     finally { await unlink(temp).catch(() => {}); }
     return summary(next);
   }

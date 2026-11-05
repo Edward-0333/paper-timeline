@@ -101,6 +101,26 @@ try {
   await chartValue(labels[0], 20); await chartValue(labels[1], 80); await numberValue('本轮同步新增引用', 16);
   await screenshot('sync-offline-cache.png');
 
+  const failure: NonNullable<CloudStatus['failure']> = { kind: 'local_data', stage: 'local_citations', occurredAt: stamp,
+    message: '引用数据格式异常：citations[0].year 必须是整数或 null（未知）', paperId: 'a'.repeat(64), title: 'Citation validation fixture', field: 'citations[0].year' };
+  const failed = { ...active, error: failure.message, failure };
+  await state(failed, '同步失败 · 上次完整同步数据');
+  const cloudCard = page.getByRole('region', { name: '云端引用监控', exact: true });
+  await cloudCard.getByText('已连接，同步失败', { exact: true }).waitFor();
+  await cloudCard.getByText(/相关论文：Citation validation fixture/).waitFor();
+  await chartValue(labels[0], 20); await numberValue('本轮同步新增引用', 16);
+  await page.getByRole('button', { name: '管理连接', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '连接云端引用监控', exact: true });
+  await dialog.getByText('已连接，同步失败', { exact: true }).waitFor();
+  await dialog.getByText(/相关论文：Citation validation fixture/).waitFor();
+  await page.setViewportSize({ width: 840, height: 700 });
+  await page.screenshot({ path: join(directory, 'cloud-sync-failure.png'), fullPage: true });
+  await page.keyboard.press('Escape'); await dialog.waitFor({ state: 'hidden' });
+  await state({ ...failed, connected: false, failure: { ...failure, kind: 'network', stage: 'authentication' }, error: '无法连接云端服务器或请求超时' }, '离线缓存');
+  await cloudCard.getByText('连接失败', { exact: true }).waitFor();
+  await state({ ...failed, connected: false, signedIn: false, failure: { ...failure, kind: 'authentication', stage: 'authentication' }, error: '登录失效' }, '离线缓存');
+  await cloudCard.getByText('需重新登录', { exact: true }).waitFor();
+
   const large: CloudStatus = { ...active, pending: 12345, newCitations: 54321,
     overview: { ...active.overview!, monitored: 1234567, libraryMonitored: 765432, queued: 88888, failed: 12345, legacyMonitored: 123456 } };
   await state(large, '已连接');

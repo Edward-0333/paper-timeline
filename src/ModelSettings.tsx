@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Bot, Check, Eye, EyeOff, LoaderCircle, Plus, Settings2, Wifi, X } from 'lucide-react';
 import { emptyModelConfiguration, modelBaseUrl, type ModelConfiguration, type ModelConnectionResult } from '../shared/model-settings';
+import { DEFAULT_CONTEXT_WINDOW } from '../shared/model-chat';
 import './ModelSettings.css';
 
 const message = (e: unknown) => e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': Error: /, '') : '大模型配置操作失败';
@@ -30,6 +31,7 @@ export function ModelSettingsDialog({ config, loadError, onClose, onSaved }: { c
   const [profileId, setProfileId] = useState<string | null>(config.activeId ?? config.profiles[0]?.id ?? null);
   const selected = config.profiles.find(profile => profile.id === profileId);
   const [name, setName] = useState(config.name), [baseUrl, setBaseUrl] = useState(config.baseUrl), [model, setModel] = useState(config.model);
+  const [contextWindow, setContextWindow] = useState(String(config.contextWindowTokens ?? DEFAULT_CONTEXT_WINDOW));
   const [apiKey, setApiKey] = useState(''), [withoutApiKey, setWithoutApiKey] = useState(config.configured && !config.hasApiKey), [visible, setVisible] = useState(false);
   const [saving, setSaving] = useState(false), [error, setError] = useState(loadError);
   const [testing, setTesting] = useState(false), [testResult, setTestResult] = useState<ModelConnectionResult | null>(null);
@@ -51,6 +53,7 @@ export function ModelSettingsDialog({ config, loadError, onClose, onSaved }: { c
     const profile = config.profiles.find(item => item.id === id);
     setProfileId(id);
     setName(profile?.name ?? ''); setBaseUrl(profile?.baseUrl ?? ''); setModel(profile?.model ?? '');
+    setContextWindow(String(profile?.contextWindowTokens ?? DEFAULT_CONTEXT_WINDOW));
     setWithoutApiKey(!!profile && !profile.hasApiKey);
     setApiKey(''); setVisible(false); setError(''); setTestResult(null);
     setView(id ? 'edit' : 'add');
@@ -82,7 +85,8 @@ export function ModelSettingsDialog({ config, loadError, onClose, onSaved }: { c
     pending.current = true; setSaving(true); setError('');
     try {
       const id = saveAsNew ? null : profileId;
-      const value = await window.paperApi!.saveModelConfig({ profileId: id, name, baseUrl, model, withoutApiKey, apiKey: withoutApiKey ? undefined : apiKey }, false);
+      const value = await window.paperApi!.saveModelConfig({ profileId: id, name, baseUrl, model, withoutApiKey, apiKey: withoutApiKey ? undefined : apiKey,
+        contextWindowTokens: contextWindow.trim() ? Number(contextWindow) : undefined }, false);
       onSaved(value); showList(id ?? value.profiles.at(-1)!.id);
     }
     catch (e) { setError(message(e)); }
@@ -143,6 +147,8 @@ export function ModelSettingsDialog({ config, loadError, onClose, onSaved }: { c
         <label htmlFor="model-config-name">配置名称</label><input id="model-config-name" required maxLength={80} placeholder="例如：我的论文阅读模型" value={name} onChange={e => setName(e.target.value)} disabled={working} />
         <label htmlFor="model-config-url">API 接口地址 <span>Base URL</span></label><input id="model-config-url" type="url" required maxLength={2048} placeholder="https://你的模型服务地址/v1" spellCheck={false} autoComplete="off" value={baseUrl} onChange={e => setBaseUrl(e.target.value)} disabled={working} />
         <label htmlFor="model-config-model">模型名称</label><input id="model-config-model" required maxLength={256} placeholder="填写服务商提供的模型 ID" spellCheck={false} value={model} onChange={e => setModel(e.target.value)} disabled={working} />
+        <label htmlFor="model-config-context">上下文容量 <span>token</span></label><input id="model-config-context" type="number" min={8192} max={2000000} step={1} placeholder={String(DEFAULT_CONTEXT_WINDOW)} value={contextWindow} onChange={e => setContextWindow(e.target.value)} disabled={working} />
+        <p className="model-settings-help">用于自动摘要压缩。默认按 32,768 token 保守预算，请按服务商公布的容量调整；生成摘要会调用当前模型。</p>
         {!withoutApiKey && <><label htmlFor="model-config-key">API Key {selected?.hasApiKey && !addressChanged && !differentModel && <span>已保存，留空保持不变</span>}</label>
           <div className="model-key-field"><input id="model-config-key" type={visible ? 'text' : 'password'} required={!selected?.hasApiKey || addressChanged} maxLength={8192} autoComplete="new-password" spellCheck={false}
             placeholder={differentModel ? '另存为新模型时填写 API Key' : selected?.hasApiKey && !addressChanged ? '已保存密钥，留空保持不变' : '填写 API Key'} value={apiKey} onChange={e => setApiKey(e.target.value)} disabled={working} />

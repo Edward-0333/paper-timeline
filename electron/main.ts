@@ -1,5 +1,9 @@
 import { app, BrowserWindow, dialog, ipcMain, net, shell, protocol, safeStorage } from 'electron';
 import { ModelSettings } from './model-settings';
+import { WebSearchSettings } from './web-search-settings';
+import type { WebSearchConfigurationInput } from '../shared/web-search';
+import { LibraryChatService } from './library-chat-service';
+import type { LibraryChatRequest, LibraryChatDecision } from '../shared/library-chat';
 import { getModelChatContext } from './model-chat-context';
 import { PaperChatStore } from './paper-chat-store';
 import type { ModelConfigurationInput } from '../shared/model-settings';
@@ -27,7 +31,9 @@ if (!lock) app.quit();
 let window: BrowserWindow | null = null;
 let library: Library;
 let modelSettings: ModelSettings;
+let webSearchSettings: WebSearchSettings;
 let paperChats: PaperChatStore;
+let libraryChat: LibraryChatService;
 let aiApi: Awaited<ReturnType<typeof startAiApi>> | null = null;
 let changingStorage = false;
 let restarting = false;
@@ -119,10 +125,16 @@ if (lock) {
       ...(app.isPackaged ? [resolve(dirname(app.getPath('exe')), '../..')] : [])]);
     library.startMineru(mineru);
     paperChats = new PaperChatStore(library);
-    modelSettings = new ModelSettings(app.getPath('userData'), {
+    const clearingPaperChats = new Set<string>();
+    const settingsCipher = {
       isEncryptionAvailable: () => safeStorage.isEncryptionAvailable() && (process.platform !== 'linux' || safeStorage.getSelectedStorageBackend() !== 'basic_text'),
-      encryptString: value => safeStorage.encryptString(value), decryptString: value => safeStorage.decryptString(value),
-    }, paperId => getModelChatContext(library, paperId), paperId => ({ library, paperId }), (paperId, messages) => paperChats.save(paperId, messages));
+      encryptString: (value: string) => safeStorage.encryptString(value), decryptString: (value: Buffer) => safeStorage.decryptString(value),
+    };
+    modelSettings = new ModelSettings(app.getPath('userData'), settingsCipher,
+      paperId => getModelChatContext(library, paperId), paperId => ({ library, paperId }), (paperId, messages) => paperChats.save(paperId, messages), paperChats);
+    webSearchSettings = new WebSearchSettings(app.getPath('userData'), settingsCipher);
+    libraryChat = new LibraryChatService(library, modelSettings, { settings: webSearchSettings,
+      fetch: (url, options) => net.fetch(url instanceof URL ? url.toString() : url, options) });
     library.on('cloud-changed', state => { if (window && !window.isDestroyed()) window.webContents.send('cloud:changed', state); });
     await library.startCloud({ fetch: (url, options) => net.fetch(url instanceof URL ? url.toString() : url, options), credentials: cloudCredentials(app.getPath('userData'), library.directory) });
     if (process.env.PAPER_TIMELINE_AI !== '0') aiApi = await startAiApi(library);
@@ -135,6 +147,26 @@ if (lock) {
     }
     handle('library:get', () => library.state());
     handle('model:config', () => modelSettings.status());
+    handle('web-search:config', () => webSearchSettings.status());
+    handle('web-search:save-config', (input: WebSearchConfigurationInput) => webSearchSettings.save(input));
+    handle('web-search:clear-config', () => webSearchSettings.clear());
+    handle('web-search:test-connection', (input: WebSearchConfigurationInput) => webSearchSettings.testConnection(input,
+      (url, options) => net.fetch(url instanceof URL ? url.toString() : url, options)));
+    handle('web-search:cancel-test', () => webSearchSettings.cancelConnectionTest());
+    handle('library-chat:send', (input: LibraryChatRequest) => libraryChat.chat(input,
+      (url, options) => net.fetch(url instanceof URL ? url.toString() : url, options), {
+        progress: progress => { if (window && !window.isDestroyed()) window.webContents.send('library-chat:progress', progress); },
+      }));
+    handle('library-chat:list', () => libraryChat.list());
+    handle('library-chat:create', () => libraryChat.create());
+    handle('library-chat:select', (id: string) => libraryChat.select(id));
+    handle('library-chat:rename', (id: string, title: string) => libraryChat.rename(id, title));
+    handle('library-chat:delete', (id: string) => libraryChat.remove(id));
+    handle('library-chat:history', (id?: string) => libraryChat.history(id));
+    handle('library-chat:clear', (id?: string) => libraryChat.clear(id));
+    handle('library-chat:cancel', (requestId: string) => libraryChat.cancel(requestId));
+    handle('library-chat:approval', (id?: string) => libraryChat.approval(id));
+    handle('library-chat:resolve', (decision: LibraryChatDecision) => libraryChat.resolveApproval(decision));
     handle('model:test-connection', (input: ModelConfigurationInput) => modelSettings.testConnection(input, (url, options) => net.fetch(url instanceof URL ? url.toString() : url, options)));
     handle('model:cancel-test', () => modelSettings.cancelConnectionTest());
     handle('model:chat-context', (paperId: string) => getModelChatContext(library, paperId));
@@ -144,13 +176,21 @@ if (lock) {
       if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) throw new Error('仅支持网页链接');
       await shell.openExternal(url.toString());
     });
-    handle('model:chat', (input: ModelChatRequest) => modelSettings.chat(input, (url, options) => net.fetch(url instanceof URL ? url.toString() : url, options), {
-      progress: label => { if (window && !window.isDestroyed()) window.webContents.send('model:chat-progress', { paperId: input.paperId, requestId: input.requestId, label }); },
-    }));
-    handle('model:chat-history', (paperId: string) => paperChats.load(paperId));
+    handle('model:chat', (input: ModelChatRequest) => {
+      if (clearingPaperChats.has(input?.paperId)) return { ok: false, message: '正在清空这篇论文的对话，请稍候。' };
+      return modelSettings.chat(input, (url, options) => net.fetch(url instanceof URL ? url.toString() : url, options), {
+        progress: label => { if (window && !window.isDestroyed()) window.webContents.send('model:chat-progress', { paperId: input.paperId, requestId: input.requestId, label }); },
+      });
+    });
+    handle('model:chat-history', async (paperId: string) => {
+      const history = await paperChats.load(paperId);
+      try { return { ...history, compaction: await paperChats.loadCompaction(paperId) }; }
+      catch { return { ...history, compaction: null, contextWarning: '摘要记录无法读取，完整对话仍保留。下次发送时将重新整理，损坏文件不会被覆盖。' }; }
+    });
     handle('model:clear-chat', async (paperId: string) => {
-      if (modelSettings.hasActiveChat(paperId)) throw new Error('请先停止当前对话，再清空记录。');
-      await paperChats.save(paperId, []);
+      if (modelSettings.hasActiveChat(paperId) || clearingPaperChats.has(paperId)) throw new Error('请先等待当前操作完成，再清空记录。');
+      clearingPaperChats.add(paperId);
+      try { await paperChats.clear(paperId); } finally { clearingPaperChats.delete(paperId); }
     });
     handle('model:cancel-chat', (requestId: string) => modelSettings.cancelChat(requestId));
     handle('model:save-config', (input: ModelConfigurationInput, activate?: boolean) => modelSettings.save(input, activate));
@@ -199,7 +239,8 @@ if (lock) {
       changingStorage = true;
       try {
         await cloudControl.catch(() => {});
-        modelSettings.cancelAllChats(); await modelSettings.whenIdle(); await paperChats.whenIdle();
+        webSearchSettings.cancelConnectionTest(); libraryChat.cancelAll(); modelSettings.cancelAllChats();
+        await webSearchSettings.whenIdle(); await libraryChat.whenIdle(); await modelSettings.whenIdle(); await paperChats.whenIdle();
         await prepareStorageChange(library, defaultDirectory, mode, directory);
         restarting = true;
         // Let the renderer receive success before closing its IPC connection.
@@ -274,14 +315,18 @@ app.on('will-quit', event => {
   event.preventDefault();
   shuttingDown = true;
   modelSettings?.cancelConnectionTest();
+  webSearchSettings?.cancelConnectionTest();
   modelSettings?.cancelAllChats();
+  libraryChat?.cancelAll();
   void (async () => {
+    await libraryChat?.whenIdle();
     await cloudControl.catch(() => {});
     await library?.stopCitationMonitoring();
     await library?.stopConversions();
     await aiApi?.close();
     await library?.whenIdle();
     await modelSettings?.whenIdle();
+    await webSearchSettings?.whenIdle();
     await paperChats?.whenIdle();
   // Finalize only after storage and background work have drained. Re-entering
   // quit during an automatic relaunch can leave a windowless process on Windows.

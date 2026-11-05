@@ -1,0 +1,17 @@
+.edit-modal.web-search-settings { width: min(530px, calc(100vw - 40px)); padding: 0; color: var(--text); }
+.web-search-settings:not([open]) { display: none; }
+.web-search-settings::backdrop { background: #00000047; }
+.web-search-settings > form { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.web-search-settings .modal-heading h2 { display: flex; align-items: center; gap: 8px; }
+.web-search-provider { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.web-search-provider strong { font-size: 15px; color: #435d81; }
+.web-search-provider > span { font-size: 11px; color: #7790ad; }
+.web-search-help { margin: 0 0 15px; color: var(--muted); font-size: 12px; line-height: 1.8; }
+.web-search-account { display: inline-flex; align-items: center; gap: 4px; margin: -5px 0 17px; padding: 0; border: 0; background: none; color: var(--accent); font-size: 12px; }
+.web-search-test-result { display: flex; flex-wrap: wrap; gap: 5px 12px; padding: 10px 12px; border-radius: 6px; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.web-search-test-result.success { color: #28734a; background: #edf8f0; }
+.web-search-test-result.failure { color: #a55344; background: #fff4f1; }
+.web-search-settings .web-search-clear { margin-right: auto; color: #a25750; }
+.web-search-clear-confirm { padding: 12px; margin-top: 12px; border: 1px solid #ebd5ce; border-radius: 6px; background: #fff9f6; }
+.web-search-clear-confirm p { margin: 0 0 10px; font-size: 12px; line-height: 1.7; }
+.web-search-clear-confirm button + button { margin-left: 10px; color: #ad5b4d; }

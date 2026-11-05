@@ -4,7 +4,9 @@ import type { ReaderDocument, ReaderState, ReaderUpdate } from './reader';
 import type { MarkdownDocument, MarkdownUpdate } from './notes-editor';
 import type { MineruEnvironment, MineruState, MineruTier } from './mineru';
 import type { ModelConfiguration, ModelConfigurationInput, ModelConnectionResult } from './model-settings';
+import type { WebSearchConfiguration, WebSearchConfigurationInput, WebSearchConnectionResult } from './web-search';
 import type { ModelChatContext, ModelChatRequest, ModelChatResult, ModelChatProgress, ModelChatHistory } from './model-chat';
+import type { LibraryChatRequest, LibraryChatHistory, LibraryChatResult, LibraryChatProgress, LibraryChatApproval, LibraryChatDecision, LibraryConversation, LibraryConversationList } from './library-chat';
 import type { CitationOrigin } from './citation-library';
 export type PaperStatus = 'queued' | 'extracting' | 'searching' | 'matched' | 'review' | 'error';
 export type MetadataSource = 'arXiv' | 'Crossref' | 'PDF' | '手动' | '导入';
@@ -98,6 +100,11 @@ export interface LibraryState { papers: Paper[]; folders: LibraryFolder[]; timel
 export type StorageAction = 'open' | 'copy' | 'create';
 export interface StorageSelection { mode: StorageAction; directory: string; paperCount: number }
 export interface PaperApi {
+  getWebSearchConfig(): Promise<WebSearchConfiguration>;
+  saveWebSearchConfig(input: WebSearchConfigurationInput): Promise<WebSearchConfiguration>;
+  clearWebSearchConfig(): Promise<WebSearchConfiguration>;
+  testWebSearchConnection(input: WebSearchConfigurationInput): Promise<WebSearchConnectionResult>;
+  cancelWebSearchConnectionTest(): Promise<void>;
   getModelConfig(): Promise<ModelConfiguration>;
   testModelConnection(input: ModelConfigurationInput): Promise<ModelConnectionResult>;
   cancelModelConnectionTest(): Promise<void>;
@@ -108,6 +115,18 @@ export interface PaperApi {
   onModelChatProgress(callback: (progress: ModelChatProgress) => void): () => void;
   chatModel(input: ModelChatRequest): Promise<ModelChatResult>;
   cancelModelChat(requestId: string): Promise<void>;
+  chatLibrary(input: LibraryChatRequest): Promise<LibraryChatResult>;
+  listLibraryConversations(): Promise<LibraryConversationList>;
+  createLibraryConversation(): Promise<LibraryConversation>;
+  selectLibraryConversation(id: string): Promise<LibraryConversationList>;
+  renameLibraryConversation(id: string, title: string): Promise<LibraryConversation>;
+  deleteLibraryConversation(id: string): Promise<LibraryConversationList>;
+  getLibraryChatHistory(conversationId?: string): Promise<LibraryChatHistory>;
+  clearLibraryChatHistory(conversationId?: string): Promise<void>;
+  cancelLibraryChat(requestId: string): Promise<void>;
+  getLibraryChatApproval(conversationId?: string): Promise<LibraryChatApproval | null>;
+  resolveLibraryChatApproval(decision: LibraryChatDecision): Promise<void>;
+  onLibraryChatProgress(callback: (progress: LibraryChatProgress) => void): () => void;
   saveModelConfig(input: ModelConfigurationInput, activate?: boolean): Promise<ModelConfiguration>;
   selectModelConfig(id: string): Promise<ModelConfiguration>;
   clearModelConfig(profileId?: string): Promise<ModelConfiguration>;

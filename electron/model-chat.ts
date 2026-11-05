@@ -1,11 +1,11 @@
 import { modelBaseUrl } from '../shared/model-settings';
-import { MODEL_CHAT_LIMITS, validateChatRequest, type ModelChatContext, type ModelChatRequest, type ModelChatResult } from '../shared/model-chat';
+import { MODEL_CHAT_LIMITS, validateChatRequest, type ChatCompaction, type ModelChatContext, type ModelChatRequest, type ModelChatResult } from '../shared/model-chat';
 import { requestPaperAgent } from './paper-agent';
 import type { PaperAgentAccess } from './paper-agent-tools';
 import { unsupportedLimit } from './model-connectivity';
 
-interface ChatTarget { baseUrl: string; model: string; apiKey: string }
-export interface ChatOptions { timeoutMs?: number; signal?: AbortSignal; context?: ModelChatContext; agent?: PaperAgentAccess; progress?: (label: string) => void }
+interface ChatTarget { baseUrl: string; model: string; apiKey: string; contextWindowTokens?: number }
+export interface ChatOptions { timeoutMs?: number; signal?: AbortSignal; context?: ModelChatContext; agent?: PaperAgentAccess; progress?: (label: string) => void; compaction?: ChatCompaction | null }
 const MAX_RESPONSE = 1024 * 1024, MAX_CONTENT = MODEL_CHAT_LIMITS.messageCharacters;
 const SYSTEM_MESSAGE = 'You are a helpful assistant in Paper Timeline. Answer the user clearly. '
   + 'The desktop supplies the current paper workspace as JSON data below. workingDirectory is this paper’s dedicated folder on the user’s computer, '
@@ -74,6 +74,7 @@ export async function requestModelChat(target: ChatTarget, input: ModelChatReque
   const context = options.context;
   if (!context || context.paperId !== request.paperId) return failure('无法确认当前文献的工作目录，请重新打开文献后重试。');
   if (options.agent) return requestPaperAgent(target, request, fetcher, { ...options, context, access: options.agent });
+  if (request.compactOnly) return failure('当前会话未启用论文 Agent，无法整理摘要。');
   // Select fields explicitly; never forward extra internal metadata from a future resolver change.
   const systemMessage = SYSTEM_MESSAGE + JSON.stringify({ paperId: context.paperId, paperTitle: context.paperTitle,
     workingDirectory: context.workingDirectory, files: { pdf: context.files.pdf, markdown: context.files.markdown,

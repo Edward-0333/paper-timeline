@@ -24,4 +24,45 @@ export interface CloudStatus {
   overview?: CloudOverview;
   reconciliationSupported?: boolean;
   error?: string;
+  /** Most recent authenticated contact, not a persistent socket or a completed sync. */
+  lastConnectedAt?: string;
+  failure?: CloudFailure;
+}
+
+export type CloudStage = 'authentication' | 'subscriptions' | 'local_citations' | 'download' | 'save';
+export interface CloudFailure {
+  kind: 'network' | 'authentication' | 'server' | 'local_data' | 'local_storage' | 'protocol' | 'sync';
+  stage: CloudStage;
+  message: string;
+  occurredAt: string;
+  paperId?: string;
+  title?: string;
+  file?: string;
+  field?: string;
+}
+export interface CloudProbe {
+  state: 'authenticated' | 'unreachable' | 'unauthorized' | 'server_error' | 'protocol_error' | 'not_signed_in' | 'not_checked';
+  checkedAt?: string;
+  message: string;
+}
+export interface CloudDiagnosticIssue {
+  severity: 'error' | 'warning';
+  paperId: string; title: string; file: string; field: string; message: string;
+  count?: number;
+}
+export interface CloudDiagnostics {
+  checkedAt: string;
+  status: CloudStatus;
+  connection: CloudProbe;
+  local: { totalPapers: number; offset: number; checkedPapers: number; nextOffset: number | null; issues: CloudDiagnosticIssue[] };
+}
+
+/** The same wording in the home card and connection dialog. */
+export function cloudConnectionLabel(cloud: CloudStatus, loading = false) {
+  if (loading) return '读取中';
+  if (cloud.syncing) return '同步中';
+  if (cloud.failure?.kind === 'authentication') return '需重新登录';
+  if (!cloud.signedIn) return '未登录';
+  if (cloud.connected) return cloud.error ? '已连接，同步失败' : '已连接';
+  return cloud.error ? '连接失败' : '暂未连接';
 }

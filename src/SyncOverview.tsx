@@ -37,12 +37,13 @@ export default function SyncOverview({ cloud, loading }: { cloud: CloudStatus; l
   const overview = loading ? undefined : cloud.overview;
   const noData = loading ? '正在读取' : cloud.signedIn ? '同步后显示' : '登录同步后显示';
   const state = loading ? '读取中' : cloud.syncing ? '同步中' : cloud.connected ? '已连接' : overview || cloud.lastSyncAt ? '离线缓存' : '尚无云端数据';
+  const syncFailed = !loading && !cloud.syncing && cloud.connected && !!cloud.error;
   const freshCitations = !loading && cloud.lastSyncAt ? count(cloud.newCitations) : undefined;
   const localPending = loading ? undefined : count(cloud.pending);
   const legacy = count(overview?.legacyMonitored);
   return <section className="home-card sync-overview" aria-label="同步概况">
     <div className="sync-overview-heading"><h2><Activity size={18} />同步概况</h2>
-      <span className={`sync-data-state ${cloud.connected ? 'connected' : ''}`}><i className={cloud.syncing ? 'sync-active' : ''} />{state}</span></div>
+      <span className={`sync-data-state ${syncFailed ? 'warning' : cloud.connected ? 'connected' : ''}`}><i className={cloud.syncing ? 'sync-active' : ''} />{syncFailed ? '同步失败 · 上次完整同步数据' : state}</span></div>
     <div className="sync-visuals">
       <CountChart title="监控论文数量对比" description="当前文献库与整个账户的监控规模" rows={[
         { label: '本库云端已确认监控', value: count(overview?.libraryMonitored), color: '#4C7CDE', unknown: overview ? '服务器升级后显示' : noData },

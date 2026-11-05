@@ -1,6 +1,11 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type { PaperApi, LibraryState } from '../shared/types';
 const api: PaperApi = {
+  getWebSearchConfig: () => ipcRenderer.invoke('web-search:config'),
+  saveWebSearchConfig: input => ipcRenderer.invoke('web-search:save-config', input),
+  clearWebSearchConfig: () => ipcRenderer.invoke('web-search:clear-config'),
+  testWebSearchConnection: input => ipcRenderer.invoke('web-search:test-connection', input),
+  cancelWebSearchConnectionTest: () => ipcRenderer.invoke('web-search:cancel-test'),
   getModelConfig: () => ipcRenderer.invoke('model:config'),
   testModelConnection: input => ipcRenderer.invoke('model:test-connection', input),
   cancelModelConnectionTest: () => ipcRenderer.invoke('model:cancel-test'),
@@ -15,6 +20,22 @@ const api: PaperApi = {
   },
   chatModel: input => ipcRenderer.invoke('model:chat', input),
   cancelModelChat: requestId => ipcRenderer.invoke('model:cancel-chat', requestId),
+  chatLibrary: input => ipcRenderer.invoke('library-chat:send', input),
+  listLibraryConversations: () => ipcRenderer.invoke('library-chat:list'),
+  createLibraryConversation: () => ipcRenderer.invoke('library-chat:create'),
+  selectLibraryConversation: id => ipcRenderer.invoke('library-chat:select', id),
+  renameLibraryConversation: (id, title) => ipcRenderer.invoke('library-chat:rename', id, title),
+  deleteLibraryConversation: id => ipcRenderer.invoke('library-chat:delete', id),
+  getLibraryChatHistory: conversationId => ipcRenderer.invoke('library-chat:history', conversationId),
+  clearLibraryChatHistory: conversationId => ipcRenderer.invoke('library-chat:clear', conversationId),
+  cancelLibraryChat: requestId => ipcRenderer.invoke('library-chat:cancel', requestId),
+  getLibraryChatApproval: conversationId => ipcRenderer.invoke('library-chat:approval', conversationId),
+  resolveLibraryChatApproval: decision => ipcRenderer.invoke('library-chat:resolve', decision),
+  onLibraryChatProgress: callback => {
+    const listener = (_event: Electron.IpcRendererEvent, progress: Parameters<typeof callback>[0]) => callback(progress);
+    ipcRenderer.on('library-chat:progress', listener);
+    return () => ipcRenderer.removeListener('library-chat:progress', listener);
+  },
   openPaperDirectory: id => ipcRenderer.invoke('library:open-paper-directory', id),
   saveModelConfig: (input, activate) => ipcRenderer.invoke('model:save-config', input, activate),
   selectModelConfig: id => ipcRenderer.invoke('model:select-config', id),

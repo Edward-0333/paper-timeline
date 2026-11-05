@@ -6,7 +6,8 @@ import { Library } from '../electron/library';
 import { localMetadata } from '../electron/metadata';
 import { mergeCitations } from '../electron/citation-data';
 import { citationSeed, readCitationSnapshot, writeCitationSnapshot } from '../electron/citation-monitor';
-import { serverAddress, type CloudOptions } from '../electron/cloud-client';
+import { serverAddress, validateRecords, type CloudOptions } from '../electron/cloud-client';
+import { cloudConnectionLabel } from '../shared/cloud';
 import type { CitationRecord } from '../shared/citation-monitor';
 import { prepareStorageChange } from '../electron/storage-settings';
 import { createDispatcher } from '../electron/ai-api';
@@ -288,7 +289,7 @@ test('local citation pages reject malformed nested fields without overwriting sn
     { sources: [null] }, { sources: [[]] }, { sources: ['openalex'] }, { sources: [{ provider: 'unknown', id: 'W1' }] },
     { sources: [{ provider: 'openalex', id: {} }] }, { authors: [null] }, { authors: [{}] },
     { title: {} }, { venue: {} }, { publicationDate: {} }, { url: {} }, { doi: {} }, { arxivId: {} }, { abstract: {} },
-    { year: {} }, { year: '2026' }, { year: 2026.5 }, { year: undefined },
+    { year: {} }, { year: '2026' }, { year: 2026.5 },
   ];
   for (const patch of malformed) {
     const raw = JSON.stringify({ ...snapshot, citations: [{ ...citation(), ...patch }] });
@@ -301,4 +302,121 @@ test('local citation pages reject malformed nested fields without overwriting sn
   await writeFile(file, JSON.stringify({ ...snapshot, citations: [legacy] }));
   assert.deepEqual((await f.library.getCitations(f.id)).citations, [legacy]);
   assert.deepEqual(f.state.requests, []);
+});
+
+test('missing years are normalized identically on download, local reads and restart without rewriting historical data', async () => {
+  const f = await fixture(); await f.library.cloudLogin('https://monitor.test', 'a', 'p');
+  await f.library.setCitationMonitoring(f.id, true);
+  f.state.records = [citation({ year: undefined })];
+  await f.library.cloudSync();
+  assert.equal(f.library.cloudStatus().connected, true); assert.equal(f.library.cloudStatus().error, undefined);
+  const file = join(f.library.citationDirectory(f.id), 'citations.json');
+  assert.equal(JSON.parse(await readFile(file, 'utf8')).citations[0].year, null);
+  const old = JSON.parse(await readFile(file, 'utf8')); delete old.citations[0].year;
+  const historical = JSON.stringify(old); await writeFile(file, historical);
+  await writeFile(file + '.bak', 'preserved backup');
+  await f.cloud.pause(); const restarted = f.make(); await restarted.initialize(); await restarted.startCloud(f.options);
+  assert.equal(restarted.citationState(f.id)?.count, 1);
+  assert.equal((await restarted.getCitations(f.id)).citations[0].year, null);
+  await restarted.cloudSync();
+  assert.equal(restarted.cloudStatus().error, undefined); assert.ok(restarted.cloudStatus().lastSyncAt);
+  assert.equal(await readFile(file, 'utf8'), historical); assert.equal(await readFile(file + '.bak', 'utf8'), 'preserved backup');
+});
+
+test('remote validation rejects invalid years and sources before writing or advancing result cursors', async () => {
+  const f = await fixture(); await f.library.cloudLogin('https://monitor.test', 'a', 'p'); await f.library.setCitationMonitoring(f.id, true);
+  for (const patch of [{ year: '2026' }, { year: 2026.5 }, { sources: [null] }]) {
+    f.state.records = [citation(patch as any)]; await f.library.cloudSync();
+    const status = f.library.cloudStatus();
+    assert.equal(status.connected, true); assert.equal(status.failure?.kind, 'protocol'); assert.equal(status.failure?.stage, 'download');
+    assert.equal(status.failure?.paperId, f.id); assert.match(status.failure!.field!, /^citations\[0\]\.(year|sources)/);
+    assert.equal(status.lastSyncAt, undefined);
+    assert.equal(JSON.parse(await readFile(join(f.library.directory, 'sync/cloud.json'), 'utf8')).cursors[f.id], undefined);
+    assert.equal((await f.library.getCitations(f.id)).total, 0);
+  }
+  assert.equal(validateRecords([{ ...citation(), year: undefined }])[0].year, null);
+  f.state.records = [citation()]; await f.library.cloudSync(); assert.equal(f.library.cloudStatus().failure, undefined);
+});
+
+test('a local validation failure preserves connection and history, then network failure and expiry get distinct statuses', async () => {
+  const f = await fixture(); await f.library.cloudLogin('https://monitor.test', 'a', 'p'); await f.library.setCitationMonitoring(f.id, true); await f.library.cloudSync();
+  const before = f.library.cloudStatus(), file = join(f.library.citationDirectory(f.id), 'citations.json');
+  const raw = JSON.parse(await readFile(file, 'utf8')); raw.citations[0].authors = null;
+  const broken = JSON.stringify(raw); await writeFile(file, broken); await f.library.cloudSync();
+  const status = f.library.cloudStatus();
+  assert.equal(status.connected, true); assert.equal(status.signedIn, true); assert.equal(status.lastSyncAt, before.lastSyncAt);
+  assert.equal(cloudConnectionLabel(status), '已连接，同步失败');
+  assert.equal(status.failure?.kind, 'local_data'); assert.equal(status.failure?.stage, 'local_citations');
+  assert.equal(status.failure?.paperId, f.id); assert.equal(status.failure?.field, 'citations[0].authors');
+  assert.match(status.failure!.file!, /^papers\/.+\/citations\/citations.json$/);
+  assert.equal(await readFile(file, 'utf8'), broken);
+  f.state.offline = true; await f.library.cloudSync();
+  assert.equal(f.library.cloudStatus().failure?.kind, 'network'); assert.equal(f.library.cloudStatus().connected, false);
+  assert.equal(cloudConnectionLabel(f.library.cloudStatus()), '连接失败');
+  f.state.offline = false; f.state.unauthorized = true; await f.library.cloudSync();
+  assert.equal(f.library.cloudStatus().failure?.kind, 'authentication'); assert.equal(f.library.cloudStatus().signedIn, false);
+  assert.equal(cloudConnectionLabel(f.library.cloudStatus()), '需重新登录');
+});
+
+test('read-only diagnostics probe only the account and page local issues without changing files, cursors, credentials or status', async () => {
+  const f = await fixture(); await f.library.cloudLogin('https://monitor.test', 'a', 'p'); await f.library.setCitationMonitoring(f.id, true); await f.library.cloudSync();
+  const second = await f.library.createPaper({ title: 'Missing year fixture' }, null, false);
+  const file = join(f.library.citationDirectory(f.id), 'citations.json');
+  const raw = JSON.parse(await readFile(file, 'utf8')); raw.citations[0].year = 'invalid'; await writeFile(file, JSON.stringify(raw));
+  const p = f.library.get(second.id);
+  await writeCitationSnapshot(f.library.directory, { ...raw, seed: citationSeed(p), citations: [citation()] }, p.storageFolder);
+  const secondFile = join(f.library.citationDirectory(second.id), 'citations.json');
+  const old = JSON.parse(await readFile(secondFile, 'utf8')); delete old.citations[0].year; await writeFile(secondFile, JSON.stringify(old));
+  const files = [f.library.file, join(f.library.directory, 'sync/cloud.json'), file, secondFile];
+  const bytes = await Promise.all(files.map(file => readFile(file)));
+  const status = f.library.cloudStatus(), requestCount = f.state.requests.length;
+  const dispatch = createDispatcher(f.library);
+  const first = await dispatch('cloud.diagnose', { limit: 1 }) as any;
+  assert.equal(first.connection.state, 'authenticated'); assert.equal(first.local.nextOffset, 1);
+  const next = await dispatch('cloud.diagnose', { offset: 1, limit: 1, checkConnection: false }) as any;
+  assert.equal(next.connection.state, 'not_checked'); assert.equal(next.local.nextOffset, null);
+  const issues = [...first.local.issues, ...next.local.issues];
+  assert.equal(issues.find(issue => issue.paperId === f.id).severity, 'error');
+  assert.equal(issues.find(issue => issue.paperId === f.id).field, 'citations[0].year');
+  assert.equal(issues.find(issue => issue.paperId === second.id).severity, 'warning');
+  assert.equal(issues.find(issue => issue.paperId === second.id).count, 1);
+  assert.deepEqual(f.state.requests.slice(requestCount).map(url => new URL(url).pathname), ['/api/desktop/v1/me']);
+  assert.deepEqual(f.library.cloudStatus(), status);
+  assert.deepEqual(await Promise.all(files.map(file => readFile(file))), bytes);
+  assert.equal(JSON.stringify(first).includes('ptd_test'), false);
+  f.state.unauthorized = true;
+  assert.equal((await f.library.cloudDiagnose()).connection.state, 'unauthorized');
+  assert.equal(f.library.cloudStatus().signedIn, true, 'diagnostic probe must not clear the cached session');
+  f.state.offline = true;
+  assert.equal((await f.library.cloudDiagnose()).connection.state, 'unreachable');
+  for (const params of [{ path: 'anywhere' }, { offset: -1 }, { limit: 101 }, { checkConnection: 'yes' }]) {
+    await assert.rejects(dispatch('cloud.diagnose', params), { code: 'INVALID_ARGUMENT' });
+  }
+  const controller = new AbortController(); controller.abort();
+  await assert.rejects(f.library.cloudDiagnose({}, controller.signal), { name: 'AbortError' });
+});
+
+test('failed sync persistence keeps pending work, cursors and last complete sync until retry succeeds', async () => {
+  const f = await fixture(); await f.library.cloudLogin('https://monitor.test', 'a', 'p'); await f.library.setCitationMonitoring(f.id, true);
+  const client = f.cloud as any, save = client.save.bind(client);
+  const failSave = async () => { throw Object.assign(new Error('private filesystem detail'), { code: 'EACCES' }); };
+  client.save = failSave;
+  await f.library.cloudSync();
+  assert.equal(f.library.cloudStatus().pending, 1); assert.equal(f.library.cloudStatus().lastSyncAt, undefined);
+  assert.equal(f.library.cloudStatus().connected, true); assert.equal(f.library.cloudStatus().failure?.kind, 'local_storage');
+  assert.equal(f.library.cloudStatus().failure?.stage, 'save');
+  assert.ok(!JSON.stringify(f.library.cloudStatus()).includes('private filesystem detail'));
+  client.save = save; await f.library.cloudSync();
+  const before = f.library.cloudStatus(), persisted = await readFile(join(f.library.directory, 'sync/cloud.json'), 'utf8');
+  assert.equal(before.pending, 0);
+  f.state.batch++; client.save = failSave;
+  await f.library.cloudSync();
+  assert.equal(client.store.cursors[f.id], 1); assert.equal(f.library.cloudStatus().lastSyncAt, before.lastSyncAt);
+  assert.equal(await readFile(join(f.library.directory, 'sync/cloud.json'), 'utf8'), persisted);
+  client.save = save; await f.library.cloudSync(); assert.equal(client.store.cursors[f.id], 2);
+  const success = f.library.cloudStatus(); client.save = failSave;
+  await f.library.cloudSync();
+  assert.equal(f.library.cloudStatus().lastSyncAt, success.lastSyncAt);
+  assert.equal(f.library.cloudStatus().newCitations, success.newCitations);
+  client.save = save; await f.library.cloudSync(); assert.equal(f.library.cloudStatus().failure, undefined);
 });

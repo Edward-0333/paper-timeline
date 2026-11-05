@@ -7,6 +7,7 @@ import CitationList, { type CitationListState } from './CitationList';
 import { collectionLabels, type HomeMetric, type PaperCollectionKind } from './home-collections';
 const PdfReader = lazy(() => import('./PdfReader'));
 const MarkdownNote = lazy(() => import('./MarkdownNote'));
+const LibraryChat = lazy(() => import('./LibraryChat'));
 import { ArrowUpRight, BookOpen, CalendarDays, Check, CircleAlert, FileText, FolderOpen, Settings, List, LoaderCircle, MoreHorizontal, PencilLine, Plus, RefreshCw, Search, X } from 'lucide-react';
 import type { ImportResult, Paper, PaperApi, PaperMetadata, PaperRating, LibraryFolder, LibraryState, TimelineTrack, TimelineChanges, TimelinePosition } from '../shared/types';
 import { formatPublicationDate, publicationDateOf } from '../shared/publication-date';
@@ -44,7 +45,7 @@ function Status({ paper, compact = false }: { paper: Paper; compact?: boolean })
 }
 
 export default function App() {
-  const [page, setPage] = useState<'home' | 'library' | 'reader' | 'md' | 'collection' | 'citations'>(() => window.paperApi?.cloudStatus ? 'home' : 'library');
+  const [page, setPage] = useState<'home' | 'library' | 'reader' | 'md' | 'collection' | 'citations' | 'assistant'>(() => window.paperApi?.cloudStatus ? 'home' : 'library');
   const [readerId, setReaderId] = useState<string | null>(null);
   const [noteId, setNoteId] = useState<string | null>(null);
   const [workspaceTabs, setWorkspaceTabs] = useState<WorkspaceTab[]>([]);
@@ -253,10 +254,18 @@ export default function App() {
       setActiveFolder('all'); setFilter('all'); setQuery(''); setPage('library');
     });
   }
+  async function openAssistant() {
+    if (page === 'assistant') return;
+    await changeReader(() => {
+      setWorkspaceTabs(previous => previous.some(tab => tab.kind === 'assistant') ? previous : [...previous, { kind: 'assistant', id: 'library' }]);
+      setPage('assistant');
+    });
+  }
   const activeTabId = page === 'reader' && readerId ? `pdf-tab-${readerId}`
     : page === 'md' && noteId ? `md-tab-${noteId}`
     : page === 'collection' && collectionKind ? `collection-tab-${collectionKind}`
-    : page === 'citations' && citationId ? `citations-tab-${citationId}` : null;
+    : page === 'citations' && citationId ? `citations-tab-${citationId}`
+    : page === 'assistant' ? 'assistant-tab-library' : null;
   async function closeTab(tab: WorkspaceTab) {
     await changeReader(() => {
       const id = workspaceTabId(tab);
@@ -278,6 +287,7 @@ export default function App() {
         else if (next.kind === 'pdf') { setReaderId(next.id); setPage('reader'); }
         else if (next.kind === 'md') { setNoteId(next.id); setPage('md'); }
         else if (next.kind === 'citations') { setCitationId(next.id); setPage('citations'); }
+        else if (next.kind === 'assistant') setPage('assistant');
         else { setCollectionKind(next.id); setPage('collection'); }
       }
       requestAnimationFrame(() => {
@@ -353,11 +363,11 @@ export default function App() {
       <div className="header-navigation">
         <nav className="home-nav" aria-label="主导航"><button disabled={readerSwitching} aria-pressed={page === 'home'} onClick={() => action(() => navigate('home'))}>个人首页</button><button disabled={readerSwitching} aria-pressed={page === 'library'} onClick={() => action(() => navigate('library'))}>文献库</button></nav>
         {workspaceTabs.length > 0 && <WorkspaceTabs tabs={workspaceTabs.flatMap(tab => {
-          const paperTitle = tab.kind !== 'collection' ? papers.find(paper => paper.id === tab.id)?.title : undefined;
-          const title = tab.kind === 'collection' ? collectionLabels[tab.id] : paperTitle ? tab.kind === 'citations' ? `引用详情：${paperTitle}` : tab.kind === 'md' ? `MD：${paperTitle}` : paperTitle : undefined;
+          const paperTitle = tab.kind !== 'collection' && tab.kind !== 'assistant' ? papers.find(paper => paper.id === tab.id)?.title : undefined;
+          const title = tab.kind === 'assistant' ? '文献库助手' : tab.kind === 'collection' ? collectionLabels[tab.id] : paperTitle ? tab.kind === 'citations' ? `引用详情：${paperTitle}` : tab.kind === 'md' ? `MD：${paperTitle}` : paperTitle : undefined;
           return title ? [{ ...tab, title }] : [];
         })} activeId={activeTabId} disabled={readerSwitching || readerClosing}
-          onSelect={tab => action(() => tab.kind === 'pdf' ? openPdf(tab.id) : tab.kind === 'md' ? openMarkdown(tab.id) : tab.kind === 'citations' ? openCitations(tab.id) : openCollection(tab.id))}
+          onSelect={tab => action(() => tab.kind === 'assistant' ? openAssistant() : tab.kind === 'pdf' ? openPdf(tab.id) : tab.kind === 'md' ? openMarkdown(tab.id) : tab.kind === 'citations' ? openCitations(tab.id) : openCollection(tab.id))}
           onClose={tab => action(() => closeTab(tab))} />}
       </div>
       <div className="header-actions">
@@ -374,7 +384,8 @@ export default function App() {
     </header>
 
     {page === 'home' && <PersonalHome papers={papers} storagePath={storagePath} disabled={!ready || readerSwitching || readerClosing}
-      onLibrary={() => action(() => navigate('library'))} onMetric={kind => action(() => openHomeMetric(kind))} />}
+      onLibrary={() => action(() => navigate('library'))} onMetric={kind => action(() => openHomeMetric(kind))} onAssistant={() => action(openAssistant)} />}
+    {page === 'assistant' && <Suspense fallback={<div className="empty-state"><LoaderCircle className="spin" /><p>正在加载文献库助手…</p></div>}><LibraryChat storagePath={storagePath} onClose={() => action(() => closeTab({ kind: 'assistant', id: 'library' }))} /></Suspense>}
     {page === 'collection' && collectionKind && <PaperCollection key={collectionKind} kind={collectionKind} papers={papers}
       state={collectionStates[collectionKind]} searchRef={searchRef}
       onChange={changes => setCollectionStates(previous => ({ ...previous, [collectionKind]: { ...previous[collectionKind], ...changes } }))}

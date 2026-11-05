@@ -15,6 +15,8 @@ import { ModelSettings } from '../electron/model-settings';
 import { renderPdfPage } from '../electron/agent-page-worker';
 import { prepareStorageChange } from '../electron/storage-settings';
 import type { ModelChatRequest } from '../shared/model-chat';
+import { estimateTextTokens } from '../shared/model-chat';
+import { SUMMARY_MARKER, SUMMARY_SYSTEM } from '../electron/chat-compaction';
 
 const target = { baseUrl: 'http://127.0.0.1:9999/v1', model: 'fixture-agent-model', apiKey: 'fixture-agent-secret' };
 function pdf() {
@@ -236,9 +238,9 @@ test('conversation and evidence survive reload and copying; corrupt history is p
 });
 
 test('saved credential is redacted from persisted turns and a storage failure does not discard the reply', async () => {
-  const f = await fixture(); let persisted: unknown;
+  const f = await fixture(); let persisted: unknown, saves = 0;
   const store = new ModelSettings(join(f.root, 'profile'), { isEncryptionAvailable: () => true, encryptString: text => Buffer.from(text), decryptString: bytes => bytes.toString() },
-    id => getModelChatContext(f.library, id), id => ({ library: f.library, paperId: id }), async (_id, messages) => { persisted = messages; throw new Error('disk fixture'); });
+    id => getModelChatContext(f.library, id), id => ({ library: f.library, paperId: id }), async (_id, messages) => { persisted = messages; if (++saves > 1) throw new Error('disk fixture'); });
   await store.save({ ...target, name: 'fixture', withoutApiKey: false });
   const input = request(f.id); input.messages[0].content = 'question ' + target.apiKey;
   const result = await store.chat(input, (async () => response('answer ' + target.apiKey)) as typeof fetch);
@@ -250,4 +252,92 @@ test('PDF source-page rendering produces an actual bounded image and rejects out
   const f = await fixture(); const image = await renderPdfPage(f.library.pdfPath(f.id), 1);
   assert.equal(image.pages, 1); assert.equal(image.data.subarray(1, 4).toString(), 'PNG');
   await assert.rejects(renderPdfPage(f.library.pdfPath(f.id), 2));
+});
+
+test('the bound SDK model summarizes long history without tools, then answers from portable memory', async () => {
+  const f = await fixture(), input = request(f.id), payloads: any[] = [];
+  input.messages = [...Array.from({ length: 80 }, (_, index) => ({ role: index % 2 ? 'assistant' as const : 'user' as const,
+    content: `ARCHIVE_MESSAGE_${index} ` + 'original evidence '.repeat(100) })), { role: 'user', content: 'LATEST_ANALYSIS_QUESTION' }];
+  const before = structuredClone(input.messages);
+  const result = await requestModelChat(target, input, async (url, init) => {
+    assert.equal(String(url), target.baseUrl + '/chat/completions');
+    const body = JSON.parse(String(init?.body)); payloads.push(body);
+    if (!body.tools?.length) {
+      assert.match(body.messages[0].content, /Summarize/); assert.equal(body.model, target.model);
+      assert.ok(estimateTextTokens(body.messages.map((item: any) => item.content).join('')) < 21504);
+      return response('Goal: compare methods. Gain 12% (fulltext:v1:L3). Pending: limitations.');
+    }
+    assert.ok(JSON.stringify(body.messages).includes(SUMMARY_MARKER));
+    assert.ok(!JSON.stringify(body.messages).includes('ARCHIVE_MESSAGE_0 '));
+    assert.ok(JSON.stringify(body.messages).includes('LATEST_ANALYSIS_QUESTION'));
+    return response('A continuing analysis based on the history summary.');
+  }, { context: await getModelChatContext(f.library, f.id), agent: { library: f.library, paperId: f.id } });
+  assert.equal(result.ok, true, result.message); assert.ok(payloads.filter(body => !body.tools?.length).length > 1);
+  assert.ok(result.compaction?.coveredMessages! > 64); assert.ok(result.contextUsage?.compacted);
+  assert.deepEqual(input.messages, before); assert.equal(result.activity?.length, 0);
+});
+
+test('manual compaction only produces memory, while failed or truncated summaries are never accepted', async () => {
+  const f = await fixture(), input = request(f.id);
+  input.compactOnly = true;
+  input.messages = Array.from({ length: 12 }, (_, index) => ({ role: index % 2 ? 'assistant' as const : 'user' as const, content: `Small history ${index}.` }));
+  const options = { context: await getModelChatContext(f.library, f.id), agent: { library: f.library, paperId: f.id } };
+  let calls = 0;
+  const manual = await requestModelChat(target, input, async (_url, init) => {
+    calls++; assert.equal(JSON.parse(String(init?.body)).tools, undefined); return response('Goal and unresolved questions retained.');
+  }, options);
+  assert.equal(manual.ok, true, manual.message); assert.equal(manual.content, undefined); assert.equal(calls, 1); assert.ok(manual.compaction);
+  for (const kind of ['http', 'empty', 'length']) {
+    const rejected = await requestModelChat(target, input, async () => {
+      if (kind === 'http') return Response.json({ error: { message: target.apiKey } }, { status: 429 });
+      const data = await response(kind === 'empty' ? '' : 'incomplete summary').json();
+      if (kind === 'length') data.choices[0].finish_reason = 'length';
+      return Response.json(data);
+    }, options);
+    assert.equal(rejected.ok, false); assert.match(rejected.message, /摘要/); assert.equal(rejected.compaction, undefined);
+    assert.ok(!JSON.stringify(rejected).includes(target.apiKey));
+  }
+});
+
+test('a manual summary can be stopped, and archive-save failure prevents any model call', async () => {
+  const f = await fixture(), input = request(f.id), controller = new AbortController();
+  input.compactOnly = true; input.messages = Array.from({ length: 8 }, (_, index) => ({ role: index % 2 ? 'assistant' : 'user', content: 'Historical message ' + index }));
+  const stopped = await requestModelChat(target, input, async (_url, init) => new Promise<Response>((_resolve, reject) => {
+    assert.equal(JSON.parse(String(init?.body)).tools, undefined);
+    init!.signal!.addEventListener('abort', () => reject(new Error('stopped')), { once: true });
+    setTimeout(() => controller.abort(), 10);
+  }), { context: await getModelChatContext(f.library, f.id), agent: { library: f.library, paperId: f.id }, signal: controller.signal });
+  assert.equal(stopped.cancelled, true); assert.equal(stopped.compaction, undefined);
+  const store = new ModelSettings(join(f.root, 'blocked-profile'), { isEncryptionAvailable: () => true, encryptString: text => Buffer.from(text), decryptString: bytes => bytes.toString() },
+    id => getModelChatContext(f.library, id), id => ({ library: f.library, paperId: id }), async () => { throw new Error('disk fixture'); });
+  await store.save({ ...target, name: 'fixture', withoutApiKey: false });
+  const result = await store.chat(request(f.id), async () => assert.fail('do not transmit when preserving the archive failed'));
+  assert.equal(result.ok, false); assert.match(result.message, /保存/);
+});
+
+test('minimum configured context supports short text and current bulky source material is bounded', async () => {
+  const f = await fixture(), options = { context: await getModelChatContext(f.library, f.id), agent: { library: f.library, paperId: f.id } };
+  let smallCalls = 0;
+  const short = await requestModelChat({ ...target, contextWindowTokens: 8192 }, request(f.id), async (_url, init) => {
+    const body = JSON.parse(String(init?.body)); assert.equal(body.max_tokens, 2048); smallCalls++;
+    return smallCalls === 1 ? response(null, { name: 'paper_info', args: {} }) : response('A short answer.');
+  }, options);
+  assert.equal(short.ok, true, short.message);
+  assert.equal(smallCalls, 2);
+  await f.library.convertPdf(f.id); await f.library.whenIdle();
+  await writeFile(await f.library.conversionPath(f.id, 'markdown'), Array.from({ length: 2000 }, (_, n) => `Evidence line ${n}: ` + 'x'.repeat(60)).join('\n'));
+  let calls = 0; const observations: unknown[] = [];
+  const result = await requestModelChat(target, request(f.id), async (_url, init) => {
+    const body = JSON.parse(String(init?.body)); calls++;
+    if (calls === 1) return response(null, { name: 'read_text', args: { source: 'fulltext' } });
+    const tools = body.messages.filter((message: any) => message.role === 'tool').map((message: any) => JSON.parse(message.content));
+    observations.push(tools.map((tool: any) => ({ compacted: tool.compacted, hasMore: tool.hasMore, nextLine: tool.nextLine, length: tool.content?.length, ok: tool.ok })));
+    assert.ok(tools.at(-1).hasMore); assert.ok(tools.at(-1).content.length < 60000);
+    if (calls < 8) return response(null, { name: 'read_text', args: { source: 'fulltext', startLine: tools.at(-1).nextLine } });
+    assert.ok(tools.some((tool: any) => tool.compacted));
+    assert.ok(tools.filter((tool: any) => tool.compacted).every((tool: any) => tool.ref && tool.nextLine));
+    return response('Read selected sections; further pages remain.');
+  }, options);
+  assert.equal(result.ok, true, result.message + JSON.stringify({ calls, observations })); assert.ok(result.contextUsage!.estimatedTokens <= result.contextUsage!.inputBudgetTokens);
+  assert.equal(calls, 8);
 });

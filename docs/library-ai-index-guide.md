@@ -6,7 +6,7 @@
 library/AI-INDEX.md
   → ai-index/catalog.json
     → papers/<稳定资料文件夹>/paper-index.json
-      → original.pdf、notes.md、annotations.json、chat.json
+      → original.pdf、notes.md、annotations.json、chat.json、chat-context.json
       → citations/citations.json
       → parsed/<最新成功版本>/Markdown、JSON、图片
 ```

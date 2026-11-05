@@ -3,7 +3,7 @@ import { X } from 'lucide-react';
 import type { PaperCollectionKind } from './home-collections';
 import './PdfReaderTabs.css';
 
-export type WorkspaceTab = { kind: 'pdf'; id: string } | { kind: 'md'; id: string } | { kind: 'citations'; id: string } | { kind: 'collection'; id: PaperCollectionKind };
+export type WorkspaceTab = { kind: 'pdf'; id: string } | { kind: 'md'; id: string } | { kind: 'citations'; id: string } | { kind: 'collection'; id: PaperCollectionKind } | { kind: 'assistant'; id: 'library' };
 export const workspaceTabId = (tab: WorkspaceTab) => `${tab.kind}-tab-${tab.id}`;
 
 export default function WorkspaceTabs({ tabs, activeId, disabled, onSelect, onClose }: {
@@ -25,7 +25,7 @@ export default function WorkspaceTabs({ tabs, activeId, disabled, onSelect, onCl
       {tabs.map((tab, index) => {
         const id = workspaceTabId(tab);
         const active = activeId === id;
-        return <div className={`reader-tab ${tab.kind === 'collection' ? 'is-collection' : ''} ${active ? 'is-active' : ''}`} key={id}>
+        return <div className={`reader-tab ${tab.kind === 'collection' || tab.kind === 'assistant' ? 'is-collection' : ''} ${active ? 'is-active' : ''}`} key={id}>
           <button className="reader-tab-select" id={id} role="tab" aria-label={tab.title}
             aria-selected={active} aria-controls={active ? tab.kind === 'pdf' ? 'pdf-reader-panel' : tab.kind === 'md' ? 'markdown-note-panel' : `${tab.kind}-panel-${tab.id}` : undefined}
             tabIndex={active || (!activeId && index === 0) ? 0 : -1} disabled={disabled} title={tab.title}
@@ -38,8 +38,8 @@ export default function WorkspaceTabs({ tabs, activeId, disabled, onSelect, onCl
               event.preventDefault();
               void onSelect(tabs[next]).then(() => requestAnimationFrame(() => document.getElementById(workspaceTabId(tabs[next]))?.focus({ preventScroll: true })));
             }}><span className="reader-tab-title">{tab.title}</span></button>
-          <button className="reader-tab-close" aria-label={tab.kind === 'pdf' ? `关闭 PDF：${tab.title}` : tab.kind === 'md' ? `关闭 MD：${tab.title.slice(3)}` : `关闭列表：${tab.title}`}
-            title={tab.kind === 'pdf' ? '关闭此 PDF（Delete）' : tab.kind === 'md' ? '关闭此笔记（Delete）' : '关闭此列表（Delete）'} disabled={disabled}
+          <button className="reader-tab-close" aria-label={tab.kind === 'assistant' ? '关闭文献库助手标签' : tab.kind === 'pdf' ? `关闭 PDF：${tab.title}` : tab.kind === 'md' ? `关闭 MD：${tab.title.slice(3)}` : `关闭列表：${tab.title}`}
+            title={tab.kind === 'assistant' ? '关闭文献库助手（Delete）' : tab.kind === 'pdf' ? '关闭此 PDF（Delete）' : tab.kind === 'md' ? '关闭此笔记（Delete）' : '关闭此列表（Delete）'} disabled={disabled}
             onClick={() => void onClose(tab)}><X size={13} /></button>
         </div>;
       })}

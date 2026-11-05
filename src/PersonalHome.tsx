@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { BookOpen, Cloud, FileText, LogIn, Radio, Settings2 } from 'lucide-react';
+import { BookOpen, Bot, Cloud, FileText, LogIn, MessageSquare, Radio, Settings2 } from 'lucide-react';
 import type { Paper } from '../shared/types';
-import type { CloudStatus, CloudReview } from '../shared/cloud';
+import { cloudConnectionLabel, type CloudStatus, type CloudReview } from '../shared/cloud';
 import './PersonalHome.css';
 import ModelSettingsCard from './ModelSettings';
 import CloudConnectionDialog from './CloudConnectionDialog';
@@ -9,8 +9,8 @@ import SyncOverview from './SyncOverview';
 import { collectionLabels, paperInCollection, type HomeMetric } from './home-collections';
 
 const time = (value?: string | null) => value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '尚无记录';
-export default function PersonalHome({ papers, storagePath, onLibrary, onMetric, disabled }: {
-  papers: Paper[]; storagePath: string; onLibrary: () => void; onMetric: (kind: HomeMetric) => void; disabled: boolean;
+export default function PersonalHome({ papers, storagePath, onLibrary, onMetric, onAssistant, disabled }: {
+  papers: Paper[]; storagePath: string; onLibrary: () => void; onMetric: (kind: HomeMetric) => void; onAssistant: () => void; disabled: boolean;
 }) {
   const [cloud, setCloud] = useState<CloudStatus>({ signedIn: false, connected: false, syncing: false, pending: 0, legacyPending: 0, newCitations: 0 });
   const [connectionOpen, setConnectionOpen] = useState(false);
@@ -53,15 +53,20 @@ export default function PersonalHome({ papers, storagePath, onLibrary, onMetric,
     <div className="home-metrics">{metrics.map(({ kind, label, icon: Icon }) => <button type="button" className="home-metric" key={kind}
       aria-label={label} disabled={disabled} onClick={() => onMetric(kind)} title={kind === 'all' ? '打开全部文献' : `打开${label}列表`}>
       <Icon size={20} /><span>{label}</span><strong>{papers.filter(paper => paperInCollection(paper, kind)).length}</strong></button>)}</div>
+    <section className="home-card home-agent-card" aria-label="文献库助手入口">
+      <div><h2><Bot size={20} />文献库助手</h2><p>通过对话整理分类和元数据，配置模型、管理云端引用监控。</p></div>
+      <button className="primary-button" disabled={disabled || !window.paperApi?.chatLibrary} onClick={onAssistant}><MessageSquare size={16} />开始聊天</button>
+    </section>
     <div className="home-config-cards">
       <ModelSettingsCard />
       <section className="home-card cloud-config-card" aria-label="云端引用监控">
         <div className="cloud-config-summary"><div className="cloud-config-title"><h2><Cloud size={19} />云端引用监控</h2>
-        <span className={`cloud-connection ${cloud.connected ? 'online' : ''}`}>{cloudLoading ? '读取中' : cloud.syncing ? '同步中' : cloud.connected ? '已连接' : cloud.signedIn ? '暂未连接' : '未登录'}</span></div>
+        <span className={`cloud-connection ${cloud.error ? 'warning' : cloud.connected ? 'online' : ''}`}>{cloudConnectionLabel(cloud, cloudLoading)}</span></div>
           {cloud.signedIn ? <p className="cloud-config-account"><strong>{cloud.user?.username}</strong><span title={cloud.server}>{cloud.server}</span></p>
             : <p>连接 Paper Monitoring，每天自动追踪论文引用。</p>}
           {!!cloud.legacyPending && <p className="cloud-config-notice">{cloud.legacyPending} 篇旧本地监控待迁移</p>}
           {!connectionOpen && (error || cloud.error) && <p className="home-error" role="alert">{error || cloud.error}</p>}
+          {!connectionOpen && cloud.failure?.title && <p className="cloud-failure-detail">相关论文：{cloud.failure.title}{cloud.failure.field && ` · ${cloud.failure.field}`}</p>}
         </div>
         <button type="button" className="secondary-button" disabled={cloudLoading || busy || !window.paperApi?.cloudStatus} onClick={() => { setError(''); setConnectionOpen(true); }}>
           {cloud.signedIn ? <Settings2 size={15} /> : <LogIn size={15} />}{cloud.signedIn ? '管理连接' : '登录并连接'}</button>

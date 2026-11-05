@@ -31,6 +31,18 @@
 .reader-ai-config-help { flex-shrink: 0; padding: 10px 15px; background: #f5f8ff; color: #65758f; }
 .reader-ai-config-help p { margin: 0 0 5px; }
 .reader-ai-config-help button, .reader-ai-error button { border: 0; color: #3d6fe8; background: transparent; padding: 0; }
+.reader-ai-memory { flex-shrink: 0; padding: 8px 15px; border-bottom: 1px solid #edf0f4; color: #6e7c90; font-size: 10px; }
+.reader-ai-memory-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px 8px; }
+.reader-ai-memory-row button { border: 0; border-radius: 4px; padding: 2px 5px; color: #3d6fe8; background: #f0f4fc; white-space: nowrap; }
+.reader-ai-memory progress { display: block; width: 100%; height: 4px; margin: 6px 0; border: 0; border-radius: 4px; overflow: hidden; background: #edf1f7; accent-color: #789be5; }
+.reader-ai-memory progress::-webkit-progress-bar { background: #edf1f7; }
+.reader-ai-memory progress::-webkit-progress-value { background: #789be5; }
+.reader-ai-memory-status { margin: 4px 0 0; color: #8793a5; }
+.reader-ai-memory-details { margin-top: 4px; }
+.reader-ai-memory-details summary { cursor: pointer; }
+.reader-ai-memory-details p { max-height: 130px; margin: 6px 0; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; color: #566882; }
+.reader-ai-memory-details small { color: #8d98a8; }
+.reader-ai-load-older { width: 100%; margin: 0 0 12px; padding: 6px; border: 1px solid #e5eaf3; border-radius: 5px; background: #f7f9fd; color: #607ba7; font-size: 10px; }
 .reader-ai-messages { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 14px; overscroll-behavior: contain; }
 .reader-ai-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 190px; height: 100%; color: #8b9ab0; text-align: center; }
 .reader-ai-empty h3 { margin: 10px 0 4px; color: #607089; font-size: 13px; font-weight: 500; }

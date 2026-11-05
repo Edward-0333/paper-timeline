@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { Cloud, LoaderCircle, LogIn, LogOut, RefreshCw, X } from 'lucide-react';
-import type { CloudStatus } from '../shared/cloud';
+import { cloudConnectionLabel, type CloudStatus } from '../shared/cloud';
 
 export default function CloudConnectionDialog({ cloud, busy, error, onLogin, onSync, onLogout, onMigrate, onClose }: {
   cloud: CloudStatus; busy: boolean; error: string;
@@ -41,7 +41,7 @@ export default function CloudConnectionDialog({ cloud, busy, error, onLogin, onS
       <div className="modal-fields">
         <p id="cloud-settings-intro" className="cloud-settings-intro">Paper Monitoring 每天北京时间 08:00 开始依次检查引用，论文之间默认间隔 10 秒。退出桌面软件后，云端监控继续运行。</p>
         {cloud.signedIn ? <div className="cloud-account">
-          <div className="cloud-account-heading"><strong>{cloud.user?.username}</strong><span className={`cloud-connection ${cloud.connected ? 'online' : ''}`}>{cloud.syncing ? '同步中' : cloud.connected ? '已连接' : '暂未连接'}</span></div>
+          <div className="cloud-account-heading"><strong>{cloud.user?.username}</strong><span className={`cloud-connection ${cloud.error ? 'warning' : cloud.connected ? 'online' : ''}`}>{cloudConnectionLabel(cloud)}</span></div>
           <span>{cloud.server}</span>
           <p>退出登录只断开这台电脑的同步，服务器上的监控会继续运行。</p>
         </div> : <div className="cloud-login">
@@ -52,6 +52,7 @@ export default function CloudConnectionDialog({ cloud, busy, error, onLogin, onS
           <small>使用 Paper Monitoring 账户登录。换电脑后重新登录即可，密码不会保存在文献库中。</small>
         </div>}
         {(error || cloud.error) && <p className="form-error" role="alert">{error || cloud.error}</p>}
+        {cloud.failure?.title && <p className="cloud-failure-detail">相关论文：{cloud.failure.title}{cloud.failure.field && ` · ${cloud.failure.field}`}</p>}
         {!!cloud.legacyPending && <div className="cloud-migration"><strong>{cloud.legacyPending} 篇旧本地监控待迁移</strong><p>确认后，将这些论文提交到当前账户。历史引用文件继续保留。</p>
           <button type="button" className="secondary-button" disabled={!cloud.signedIn || busy || cloud.syncing} onClick={() => void perform(onMigrate)}>迁移到当前账户</button></div>}
       </div>

@@ -4,6 +4,8 @@
 .sync-data-state > i { width: 6px; height: 6px; border-radius: 50%; background: #a3adbc; }
 .sync-data-state.connected { color: #348266; }
 .sync-data-state.connected > i { background: #4fa57f; }
+.sync-data-state.warning { color: #98601e; }
+.sync-data-state.warning > i { background: #cf973e; }
 .sync-visuals { display: grid; grid-template-columns: 1fr 1fr .95fr; gap: 16px; }
 .sync-chart, .sync-round-summary { margin: 0; min-width: 0; padding: 18px; border: 1px solid #e8edf4; border-radius: 10px; background: #fafbfd; }
 .sync-chart h3, .sync-round-summary h3 { margin: 0; font-size: 13px; font-weight: 550; color: #40516a; }

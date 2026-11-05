@@ -85,6 +85,7 @@ export function createDispatcher(library: Library) {
     'citations.setMonitoring': async p => { paper(p.id); await library.setCitationMonitoring(p.id, p.enabled); return { id: p.id, enabled: paper(p.id).citationMonitoring === true, state: library.citationState(p.id) }; },
     'citations.get': p => { paper(p.id); return library.getCitations(p.id, p.offset, p.limit); },
     'cloud.status': () => library.cloudStatus(),
+    'cloud.diagnose': p => library.cloudDiagnose(p),
     'cloud.sync': () => library.cloudSync(),
     'cloud.review': p => library.cloudReview(p.offset),
     'cloud.reconcile': () => library.cloudReconcile(),

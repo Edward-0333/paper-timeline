@@ -8,6 +8,7 @@ library/
 ├─ library.json.bak                     上一次索引保存的备份（如有）
 ├─ AI-INDEX.md                          AI 资料导航入口（自动生成）
 ├─ ai-index/catalog.json                按标题、编号、标签定位论文（自动生成）
+├─ assistant/                          全库助手会话列表、原有聊天及 conversations/<会话ID>/ 中的独立记录与摘要
 ├─ papers/
 │  ├─ Alvinn__a1b2c3d4e5f6/
 │  │  ├─ paper-index.json               本篇元数据和资料清单（自动生成）
@@ -17,6 +18,8 @@ library/
 │  │  ├─ annotations.json.bak           上一版阅读记录（如有）
 │  │  ├─ chat.json                      已保存的 AI 对话和资料引用（如有）
 │  │  ├─ chat.json.bak                  上一次对话记录（如有）
+│  │  ├─ chat-context.json              AI 历史摘要、覆盖范围和校验信息（如有）
+│  │  ├─ chat-context.json.bak          上一版摘要（如有）
 │  │  ├─ parsed/                        MinerU 全文转换（如有）
 │  │  │  ├─ result.json                 当前成功解析版本的索引
 │  │  │  └─ <转换版本UUID>/              全文 MD、JSON、图片

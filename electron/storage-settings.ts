@@ -156,6 +156,7 @@ async function populateEmptyLibrary(mode: 'copy' | 'create', directory: string, 
       catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
       // Historical pre-migration trees remain in the source backup, not in a new live copy.
       await copyOptionalDirectory('sync');
+      await copyOptionalDirectory('assistant');
     }
     // Write the index last. Session credentials and transient files are excluded.
     const index = join(directory, 'library.json');

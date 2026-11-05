@@ -15,7 +15,7 @@ function run(args) {
 }
 const bin = (p) => join('node_modules', p);
 if (command === 'typecheck') run([bin('typescript/bin/tsc')]);
-else if (command === 'test') run(['--import', 'tsx', '--test', 'tests/library-ai-index.test.ts', 'tests/paper-experience.test.ts', 'tests/metadata.test.ts', 'tests/library.test.ts', 'tests/storage-path.test.ts', 'tests/storage-settings.test.ts', 'tests/publication-date.test.ts', 'tests/timeline-layout.test.ts', 'tests/tag-layout.test.ts', 'tests/paper-tags.test.ts', 'tests/timelines.test.ts', 'tests/ai-api.test.ts', 'tests/notes.test.ts', 'tests/paper-files.test.ts', 'tests/citations.test.ts', 'tests/citation-library.test.ts', 'tests/ratings.test.ts', 'tests/citation-monitor.test.ts', 'tests/reader.test.ts', 'tests/reader-zoom.test.ts', 'tests/mineru.test.ts', 'tests/model-settings.test.ts', 'tests/model-connectivity.test.ts', 'tests/model-chat.test.ts', 'tests/paper-storage.test.ts', 'tests/paper-agent.test.ts', 'tests/chat-markdown.test.ts']);
+else if (command === 'test') run(['--import', 'tsx', '--test', 'tests/library-model-edit.test.ts', 'tests/openai-web-search.test.ts', 'tests/web-search-settings.test.ts', 'tests/web-reader.test.ts', 'tests/library-web.test.ts', 'tests/library-chat-store.test.ts', 'tests/library-chat-delete.test.ts', 'tests/library-chat-sessions.test.ts', 'tests/library-chat.test.ts', 'tests/library-agent-tools.test.ts', 'tests/library-ai-index.test.ts', 'tests/paper-experience.test.ts', 'tests/metadata.test.ts', 'tests/library.test.ts', 'tests/storage-path.test.ts', 'tests/storage-settings.test.ts', 'tests/publication-date.test.ts', 'tests/timeline-layout.test.ts', 'tests/tag-layout.test.ts', 'tests/paper-tags.test.ts', 'tests/timelines.test.ts', 'tests/ai-api.test.ts', 'tests/notes.test.ts', 'tests/paper-files.test.ts', 'tests/citations.test.ts', 'tests/citation-library.test.ts', 'tests/ratings.test.ts', 'tests/citation-monitor.test.ts', 'tests/reader.test.ts', 'tests/reader-zoom.test.ts', 'tests/mineru.test.ts', 'tests/model-settings.test.ts', 'tests/model-connectivity.test.ts', 'tests/model-chat.test.ts', 'tests/paper-storage.test.ts', 'tests/paper-agent.test.ts', 'tests/chat-markdown.test.ts', 'tests/chat-compaction.test.ts', 'tests/chat-archive.test.ts', 'tests/chat-context-integration.test.ts']);
 else if (command === 'test:ai-index') run(['--import', 'tsx', '--test', 'tests/library-ai-index.test.ts']);
 else if (command === 'test:experience') run(['--import', 'tsx', 'tests/paper-experience-desktop.ts', ...process.argv.slice(3)]);
 else if (command === 'test:reader') run(['--import', 'tsx', 'tests/pdf-reader.ts', ...process.argv.slice(3)]);
@@ -30,6 +30,13 @@ else if (command === 'test:citations') run(['--import', 'tsx', 'tests/citations-
 else if (command === 'test:tag-delete') run(['--import', 'tsx', 'tests/tag-delete-desktop.ts', ...process.argv.slice(3)]);
 else if (command === 'test:tag-colors') run(['--import', 'tsx', 'tests/tag-colors-desktop.ts', ...process.argv.slice(3)]);
 else if (command === 'test:chat') run(['--import', 'tsx', 'tests/pdf-chat-desktop.ts', ...process.argv.slice(3)]);
+else if (command === 'test:chat-compaction') run(['--import', 'tsx', 'tests/chat-compaction-desktop.ts', ...process.argv.slice(3)]);
+else if (command === 'test:library-chat') run(['--import', 'tsx', 'tests/library-chat-desktop.ts', ...process.argv.slice(3)]);
+else if (command === 'test:library-model-edit') run(['--import', 'tsx', 'tests/library-model-edit-desktop.ts', ...process.argv.slice(3)]);
+else if (command === 'test:library-chat-sessions') run(['--import', 'tsx', 'tests/library-chat-sessions-desktop.ts', ...process.argv.slice(3)]);
+else if (command === 'test:library-chat-delete') run(['--import', 'tsx', 'tests/library-chat-delete-desktop.ts', ...process.argv.slice(3)]);
+else if (command === 'test:library-web') run(['--import', 'tsx', 'tests/library-web-desktop.ts', ...process.argv.slice(3)]);
+else if (command === 'test:library-openai-web') run(['--import', 'tsx', 'tests/library-openai-web-desktop.ts', ...process.argv.slice(3)]);
 else if (command === 'test:pdf') run(['--import', 'tsx', 'tests/sample-pdfs.ts']);
 else if (command === 'test:ratings') run(['tests/ratings.cjs']);
 else if (command === 'test:timeline-viewport') run(['tests/timeline-viewport.cjs']);

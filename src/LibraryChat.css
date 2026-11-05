@@ -1,0 +1,126 @@
+.library-ai-page { display: grid; grid-template-columns: clamp(190px, 22vw, 260px) minmax(0, 1fr); flex: 1; min-width: 0; min-height: 0; overflow: hidden; background: #fff; }
+.library-ai-history { display: flex; flex-direction: column; min-height: 0; min-width: 0; padding: 22px 12px 12px; background: #f7f8fb; border-right: 1px solid #e5e9f0; }
+.library-ai-history-heading { display: flex; align-items: center; gap: 9px; padding: 0 10px 19px; color: #435974; }
+.library-ai-history-heading h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.library-ai-new { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 10px; border: 1px solid #d9e1ed; border-radius: 8px; background: #fff; color: #49658f; font-size: 13px; }
+.library-ai-new:hover:not(:disabled) { background: #edf3ff; border-color: #bfd0ec; }
+.library-ai-history-search { display: flex; align-items: center; gap: 7px; padding: 8px 10px; margin: 16px 0 14px; border: 1px solid #e5e9f0; border-radius: 7px; background: #fff; color: #9aa6b9; }
+.library-ai-history-search input { width: 100%; min-width: 0; padding: 0; border: 0; outline: 0; background: transparent; color: #576b85; font: 12px/1.5 "Segoe UI", "Microsoft YaHei UI", sans-serif; }
+.library-ai-history-search:focus-within { border-color: #adc4ec; }
+.library-ai-history-search input::placeholder { color: #9ba7ba; }
+.library-ai-history-label { display: flex; align-items: center; justify-content: space-between; padding: 0 10px 9px; color: #94a0b2; font-size: 11px; }
+.library-ai-history-list { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; }
+.library-ai-history-row { display: flex; align-items: center; margin: 2px 0; border: 1px solid transparent; border-radius: 8px; }
+.library-ai-history-row:hover, .library-ai-history-row:focus-within { background: #edf0f6; }
+.library-ai-history-row.is-current { border-color: #dce5f6; background: #eaf0fc; }
+.library-ai-history-item { display: block; flex: 1; min-width: 0; padding: 10px 5px 10px 9px; border: 0; border-radius: 7px; background: transparent; color: #64738b; text-align: left; }
+.library-ai-history-item.is-current { color: #3e66a5; }
+.library-ai-history-delete { display: flex; flex-shrink: 0; align-items: center; justify-content: center; width: 28px; height: 28px; margin-right: 5px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: #9aa6b8; }
+.library-ai-history-delete:hover:not(:disabled) { background: #fce9e6; color: #b95649; }
+.library-ai-history-delete:disabled { opacity: .4; }
+.library-ai-history-item:focus-visible, .library-ai-history-delete:focus-visible { outline: 2px solid #8daee1; outline-offset: -2px; }
+.library-ai-history-title { display: flex; align-items: center; gap: 7px; font-size: 12px; line-height: 1.6; }
+.library-ai-history-title > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.library-ai-history-title svg { flex-shrink: 0; }
+.library-ai-history-meta { display: flex; justify-content: space-between; gap: 8px; padding: 5px 0 0 21px; color: #99a5b7; font-size: 10px; }
+.library-ai-history-meta .needs-confirmation { color: #a67b35; }
+.library-ai-history-empty { display: flex; gap: 6px; align-items: center; justify-content: center; padding: 20px 5px; color: #96a2b5; font-size: 12px; }
+.library-ai-history-error { padding: 9px; margin-bottom: 8px; border-radius: 6px; background: #fff2ef; color: #b26652; font-size: 11px; }
+.library-ai-history-error p { margin: 0 0 5px; overflow-wrap: anywhere; }
+.library-ai-history-error button { display: inline-flex; align-items: center; gap: 4px; padding: 2px 0; border: 0; background: none; color: #657fc0; font: inherit; }
+.library-ai-history-footnote { margin: 12px 0 0; padding: 8px 8px 0; border-top: 1px solid #e9edf3; color: #a0aabd; text-align: center; font-size: 10px; }
+.library-ai-conversation { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+.library-ai-no-conversation { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; padding: 20px; color: #8d9bb0; }
+.library-ai-no-conversation h2 { font-size: 18px; color: #647b9c; }
+.library-ai-no-conversation p { font-size: 12px; }
+.library-ai-chat { flex: 1; border: 0; border-radius: 0; font-size: 13px; }
+.library-ai-chat .reader-ai-heading { padding: 13px 22px; }
+.library-ai-chat .reader-ai-heading h2 { min-width: 0; font-size: 15px; }
+.library-ai-chat .reader-ai-heading h2 span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.library-ai-chat .reader-ai-heading > div, .library-ai-chat .reader-ai-heading h2 svg { flex-shrink: 0; }
+.library-ai-rename { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 22px; border-bottom: 1px solid #e7edf4; background: #fafcff; font-size: 12px; }
+.library-ai-rename label { color: #6c7f9a; }
+.library-ai-rename input { flex: 1; min-width: 120px; padding: 6px 8px; border: 1px solid #cedaed; border-radius: 5px; background: white; color: #536b8d; font: inherit; }
+.library-ai-rename button { padding: 6px 10px; border: 1px solid #d7e1ef; border-radius: 5px; background: #fff; color: #5674a0; font: inherit; }
+.library-ai-rename p { flex-basis: 100%; margin: 0; color: #b36a5a; }
+.library-ai-chat .reader-ai-model { padding: 10px 23px 0; }
+.library-ai-chat .reader-ai-memory { padding: 7px 23px; }
+.library-ai-scope { display: flex; flex-direction: column; gap: 3px; padding: 5px 23px 10px; border-bottom: 1px solid #edf0f4; color: #8491a5; font-size: 11px; }
+.library-ai-scope > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.library-ai-scope small { color: #6f8098; }
+.library-ai-chat .reader-ai-messages { padding: 18px 24px; }
+.library-ai-chat .reader-ai-compose { padding: 12px 23px 9px; }
+.library-ai-web-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 13px; padding-bottom: 9px; }
+.library-ai-web-toggle, .library-ai-web-settings { display: inline-flex; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid #dce4ef; border-radius: 6px; background: #f8faff; color: #788ba7; font-size: 11px; }
+.library-ai-web-toggle.is-on { color: #3b6ac0; border-color: #bed0f2; background: #edf3ff; }
+.library-ai-web-toggle:hover:not(:disabled), .library-ai-web-settings:hover:not(:disabled) { background: #eaf1fd; }
+.library-ai-web-toggle:disabled { opacity: .55; }
+.library-ai-web-settings { border-color: transparent; background: transparent; }
+.library-ai-web-provider { padding: 5px 7px; border: 1px solid #dce4ef; border-radius: 6px; background: #fff; color: #6880a3; font: 11px/1.4 "Segoe UI", "Microsoft YaHei UI", sans-serif; }
+.library-ai-web-provider:disabled { opacity: .55; }
+.library-ai-web-controls > small { color: #90a0b8; font-size: 10px; line-height: 1.6; }
+.library-ai-switch-track { display: block; width: 23px; height: 13px; padding: 2px; border-radius: 10px; background: #c5cfdd; }
+.library-ai-switch-track > span { display: block; width: 9px; height: 9px; border-radius: 50%; background: white; transition: transform .16s ease; }
+.library-ai-web-toggle.is-on .library-ai-switch-track { background: #5d86dc; }
+.library-ai-web-toggle.is-on .library-ai-switch-track > span { transform: translateX(10px); }
+.library-ai-web-error { margin: 0 0 8px; color: #b26652; font-size: 11px; line-height: 1.6; }
+.library-ai-sources { margin-top: 12px; padding: 9px 12px; border: 1px solid #e2e9f4; border-radius: 7px; background: #f8faff; }
+.library-ai-sources summary { color: #6e86ac; cursor: pointer; font-size: 11px; }
+.library-ai-sources ul { display: grid; gap: 8px; margin: 8px 0 0; padding: 0; list-style: none; }
+.library-ai-sources li { min-width: 0; color: #597295; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.library-ai-sources a { display: inline-flex; align-items: baseline; gap: 5px; max-width: 100%; color: #446db3; text-decoration: none; }
+.library-ai-sources a:hover { text-decoration: underline; }
+.library-ai-sources a svg { flex-shrink: 0; }
+.library-ai-sources small { display: block; margin-top: 2px; color: #92a0b5; font-size: 10px; }
+.library-ai-sources > p { margin: 6px 0 0; font-size: 11px; color: #b26652; }
+.library-ai-chat .reader-ai-empty { min-height: 200px; gap: 5px; }
+.library-ai-chat .reader-ai-empty h3 { font-size: 16px; }
+.library-ai-chat .reader-ai-empty p { font-size: 12px; line-height: 1.9; }
+.library-ai-chat .reader-ai-empty > small { margin-top: 8px; color: #8b9ab0; font-size: 10px; }
+.library-ai-suggestions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 12px; }
+.library-ai-suggestions button { padding: 7px 10px; border: 1px solid #e2e8f2; border-radius: 7px; background: #f8faff; color: #6880a5; font-size: 11px; }
+.library-ai-suggestions button:hover { border-color: #b8cbea; background: #edf3ff; }
+.library-ai-approval { margin: 8px 0 18px; padding: 18px; border: 1px solid #cbd9f3; border-radius: 9px; background: #f7faff; color: #405673; }
+.library-ai-model-edit-dialog { width: min(680px, calc(100vw - 48px)); max-height: 85vh; padding: 0; overflow: auto; }
+.library-ai-model-edit-dialog .library-ai-approval { margin: 0; border: 0; border-radius: 0; }
+.library-ai-approval-heading { display: flex; align-items: center; gap: 8px; }
+.library-ai-approval-heading svg { flex-shrink: 0; color: #4a74be; }
+.library-ai-approval-heading h3 { margin: 0; font-size: 14px; color: #355782; }
+.library-ai-approval-heading > span { margin-left: auto; flex-shrink: 0; padding: 2px 7px; border-radius: 10px; background: #e9f0fe; color: #6485bd; font-size: 10px; }
+.library-ai-approval > p { margin: 9px 0 12px; color: #71839d; font-size: 12px; overflow-wrap: anywhere; }
+.library-ai-changes { padding-left: 22px; margin: 0; max-height: 300px; overflow: auto; }
+.library-ai-changes > li { padding: 5px 0; overflow-wrap: anywhere; }
+.library-ai-changes strong { font-size: 12px; font-weight: 550; }
+.library-ai-before-after { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin: 7px 0 4px; }
+.library-ai-before-after > div { min-width: 0; }
+.library-ai-before-after span { color: #8b98ad; font-size: 10px; }
+.library-ai-before-after pre { max-height: 140px; overflow: auto; margin: 3px 0 0; padding: 8px; border: 1px solid #e2e9f4; border-radius: 5px; background: white; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; font: 11px/1.7 Consolas, "Microsoft YaHei UI", sans-serif; }
+.library-ai-secure-model { min-width: 0; margin: 12px 0 0; padding: 12px; border: 1px solid #d8e4f4; border-radius: 6px; background: white; }
+.library-ai-secure-model legend { display: inline-flex; align-items: center; gap: 5px; padding: 0 5px; font-size: 12px; }
+.library-ai-secure-model dl { display: grid; gap: 4px; margin: 0 0 12px; font-size: 11px; }
+.library-ai-secure-model dl > div { display: flex; gap: 12px; }
+.library-ai-secure-model dt { width: 65px; flex-shrink: 0; color: #8895a7; }
+.library-ai-secure-model dd { margin: 0; overflow-wrap: anywhere; user-select: text; }
+.library-ai-secure-model > label { display: block; font-size: 11px; }
+.library-ai-secure-model > input { display: block; width: 100%; margin: 5px 0 10px; padding: 8px; border: 1px solid #d8e1ef; border-radius: 5px; font: inherit; color: #3d526e; background: #fff; }
+.library-ai-secure-model .library-ai-no-key { display: flex; align-items: center; gap: 6px; margin: 6px 0; }
+.library-ai-no-key input { margin: 0; }
+.library-ai-secure-model > small { display: block; color: #8897ac; font-size: 10px; line-height: 1.7; }
+.library-ai-approval .library-ai-approval-error { color: #ad5b4d; }
+.library-ai-approval-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; }
+.library-ai-approval-actions button { padding: 6px 11px; border: 1px solid #d4def0; border-radius: 5px; background: #fff; color: #647eaa; font-size: 11px; }
+.library-ai-approval-actions .reader-ai-send { color: #fff; background: #3d6fe8; border-color: #3d6fe8; }
+.edit-modal.library-ai-delete-dialog { width: min(460px, calc(100vw - 40px)); padding: 0; color: var(--text); }
+.library-ai-delete-dialog:not([open]) { display: none; }
+.library-ai-delete-dialog::backdrop { background: #00000047; }
+.library-ai-delete-dialog .modal-fields { padding-bottom: 22px; }
+.library-ai-delete-dialog .modal-fields p { margin: 0; color: #738099; font-size: 13px; line-height: 1.8; }
+.library-ai-delete-dialog .modal-fields .library-ai-delete-name { margin-bottom: 12px; color: #3f5577; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.library-ai-delete-dialog .modal-fields .form-error { margin-top: 12px; color: #b75f52; }
+.library-ai-delete-dialog .library-ai-delete-confirm { background: #c96254; border-color: #c96254; }
+.library-ai-delete-dialog .library-ai-delete-confirm:hover:not(:disabled) { background: #b75246; border-color: #b75246; }
+@media (max-width: 800px) {
+  .library-ai-page { grid-template-columns: 185px minmax(0, 1fr); }
+  .library-ai-history { padding: 16px 8px 8px; }
+  .library-ai-chat .reader-ai-heading, .library-ai-chat .reader-ai-messages { padding-left: 14px; padding-right: 14px; }
+}

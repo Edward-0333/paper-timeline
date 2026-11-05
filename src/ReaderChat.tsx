@@ -1,12 +1,12 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { Bot, Check, Copy, LoaderCircle, RotateCw, Send, Settings2, Square, Trash2, X } from 'lucide-react';
 import type { Paper } from '../shared/types';
-import type { ModelChatContext } from '../shared/model-chat';
+import { chatInputBudget, contextWindowTokens, estimateTextTokens, type ModelChatContext } from '../shared/model-chat';
 import { emptyModelConfiguration } from '../shared/model-settings';
 import { ModelSettingsDialog } from './ModelSettings';
 import ChatMarkdown from './ChatMarkdown';
-import { clearReaderChat, loadReaderChat, readerChatSession, retryReaderChat, sendReaderChat, setReaderChatDraft, stopReaderChat, subscribeReaderChat } from './reader-chat-state';
+import { clearReaderChat, compactReaderChat, loadReaderChat, readerChatSession, retryReaderChat, sendReaderChat, setReaderChatDraft, stopReaderChat, subscribeReaderChat } from './reader-chat-state';
 import styles from './ReaderChat.css?inline';
 import streamdownStyles from '../.generated/streamdown.css?inline';
 import katexStyles from 'katex/dist/katex.min.css?inline';
@@ -36,6 +36,15 @@ export default function ReaderChat({ paper, onClose }: { paper: Paper; onClose: 
   const [loading, setLoading] = useState(true), [configError, setConfigError] = useState(''), [settings, setSettings] = useState(false);
   const [context, setContext] = useState<ModelChatContext | null>(null), [contextError, setContextError] = useState('');
   const input = useRef<HTMLTextAreaElement>(null), log = useRef<HTMLDivElement>(null);
+  const [visibleMessages, setVisibleMessages] = useState(50);
+  const olderScroll = useRef<{ height: number; top: number } | null>(null);
+  useEffect(() => { setVisibleMessages(50); olderScroll.current = null; }, [paper.id]);
+  useLayoutEffect(() => {
+    if (olderScroll.current && log.current) {
+      log.current.scrollTop = olderScroll.current.top + log.current.scrollHeight - olderScroll.current.height;
+      olderScroll.current = null;
+    }
+  }, [visibleMessages]);
   useEffect(() => { void loadReaderChat(paper.id); }, [paper.id]);
   useEffect(() => {
     let active = true;
@@ -64,7 +73,14 @@ export default function ReaderChat({ paper, onClose }: { paper: Paper; onClose: 
     return () => { observer.disconnect(); cancelAnimationFrame(frame); };
   }, [paper.id, state.messages.length, state.pending, state.error]);
   const currentContext = context?.paperId === paper.id ? context : null;
-  const canSend = config.configured && !loading && state.loaded && !!currentContext && !state.pending && !!state.draft.trim();
+  const canSend = config.configured && !loading && state.loaded && !!currentContext && !state.pending && !state.clearing && !!state.draft.trim();
+  const memory = state.compaction?.paperId === paper.id && state.compaction.coveredMessages <= state.messages.length ? state.compaction : null;
+  const windowTokens = contextWindowTokens(config.contextWindowTokens);
+  const historyTokens = useMemo(() => estimateTextTokens(memory?.summary ?? '') + state.messages.slice(memory?.coveredMessages ?? 0).reduce((sum, item) => sum + estimateTextTokens(item.content) + 8, 0), [memory, state.messages]);
+  const estimatedTokens = historyTokens + estimateTextTokens(state.draft);
+  const contextPercent = Math.min(100, Math.round(estimatedTokens / windowTokens * 100));
+  const autoCompactNext = estimatedTokens >= chatInputBudget(windowTokens);
+  const hiddenMessages = Math.max(0, state.messages.length - visibleMessages);
   // Clicking selectable prose must leave keyboard focus in this panel; otherwise
   // EmbedPDF's document-level Ctrl+C handler consumes the browser's native copy.
   return <aside className="reader-ai-chat" aria-label="AI 聊天" tabIndex={-1} onKeyDown={event => {
@@ -74,7 +90,7 @@ export default function ReaderChat({ paper, onClose }: { paper: Paper; onClose: 
     <style>{streamdownStyles + katexStyles + streamdownMotion + styles}</style>
     <header className="reader-ai-heading"><h2><Bot size={17} />AI 聊天</h2><div>
       <button className="reader-ai-icon" aria-label="配置大模型" title="配置大模型" disabled={!!state.pending || loading} onClick={() => setSettings(true)}><Settings2 size={16} /></button>
-      <button className="reader-ai-icon" aria-label="清空对话" title="清空对话" disabled={!!state.pending || !state.messages.length} onClick={() => clearReaderChat(paper.id)}><Trash2 size={15} /></button>
+      <button className="reader-ai-icon" aria-label="清空对话" title="清空对话" disabled={!!state.pending || state.clearing || !state.messages.length} onClick={() => clearReaderChat(paper.id)}><Trash2 size={15} /></button>
       <button className="reader-ai-icon" aria-label="关闭 AI 聊天" title="关闭 AI 聊天" onClick={onClose}><X size={17} /></button>
     </div></header>
     <div className="reader-ai-model"><span>{loading ? '正在读取配置…' : config.configured ? config.name : config.profiles.length ? '请选择已保存的模型' : '尚未配置大模型'}</span>
@@ -94,10 +110,22 @@ export default function ReaderChat({ paper, onClose }: { paper: Paper; onClose: 
         </>}
       </div>
     </details>
+    {config.configured && <section className="reader-ai-memory" aria-label="对话上下文">
+      <div className="reader-ai-memory-row"><span title="对话文字的估算；论文资料、工具说明和回答另需预留容量。">对话预计 {estimatedTokens.toLocaleString()} / {windowTokens.toLocaleString()} token</span>
+        <button type="button" disabled={!!state.pending || state.clearing || !state.loaded || !currentContext || !state.messages.length} onClick={() => void compactReaderChat(paper.id)}>立即压缩</button></div>
+      <progress aria-label="预计上下文占用" max={100} value={contextPercent} />
+      <div className="reader-ai-memory-status" role="status">{memory ? `已摘要压缩 ${memory.coveredMessages} 条早期消息 · 原始记录保留` : '长对话会自动生成摘要 · 原始记录保留'}{autoCompactNext && ' · 发送时将检查并压缩'}</div>
+      {memory && <details className="reader-ai-memory-details"><summary>查看历史摘要</summary><p>{memory.summary}</p><small>更新于 {new Date(memory.updatedAt).toLocaleString()}</small></details>}
+      {!state.pending && state.compactOnly && state.progress && <p className="reader-ai-memory-status" role="status">{state.progress}</p>}
+    </section>}
     {(configError || (!loading && !config.configured)) && <div className="reader-ai-config-help"><p>{configError || '配置 API 大模型后即可开始聊天。'}</p><button onClick={() => setSettings(true)}>配置大模型</button></div>}
     <div className="reader-ai-messages" ref={log} role="log" aria-label="聊天记录" aria-live="polite" aria-relevant="additions text">
+      {hiddenMessages > 0 && <button type="button" className="reader-ai-load-older" onClick={() => {
+        if (log.current) olderScroll.current = { height: log.current.scrollHeight, top: log.current.scrollTop };
+        setVisibleMessages(count => count + 50);
+      }}>查看更早消息（还有 {hiddenMessages} 条）</button>}
       {!state.messages.length && <div className="reader-ai-empty"><Bot size={30} /><h3>论文阅读 Agent</h3><p>可分析全文、查看图片与核对原始页面。<br />缺少全文时可自动调用 MinerU。</p></div>}
-      {state.messages.map(message => <article className={`reader-ai-message ${message.role}`} key={message.id} aria-label={message.role === 'user' ? '我的消息' : 'AI 回复'}>
+      {state.messages.slice(-visibleMessages).map(message => <article className={`reader-ai-message ${message.role}`} key={message.id} aria-label={message.role === 'user' ? '我的消息' : 'AI 回复'}>
         <div className="reader-ai-message-author"><span>{message.role === 'user' ? '你' : 'AI'}</span><MessageCopyButton content={message.content} role={message.role} /></div>
         <div className="reader-ai-message-text">{message.role === 'assistant' ? <ChatMarkdown content={message.content} /> : message.content}</div>
         {!!message.activity?.length && <details className="reader-ai-evidence"><summary>资料查阅记录 · {message.activity.length} 步</summary>
@@ -105,6 +133,7 @@ export default function ReaderChat({ paper, onClose }: { paper: Paper; onClose: 
           {!!message.sources?.length && <ul>{message.sources.map(source => <li key={source.id} title={source.id}>{source.label}</li>)}</ul>}
         </details>}
       </article>)}
+      {state.clearing && <div className="reader-ai-thinking" role="status"><LoaderCircle size={15} className="reader-ai-spin" />正在清空对话…</div>}
       {state.pending && <div className="reader-ai-thinking" role="status"><LoaderCircle size={15} className="reader-ai-spin" />{state.stopping ? '正在停止…' : state.progress || '正在思考…'}</div>}
       {state.error && <div className="reader-ai-error" role="alert"><p>{state.error}</p>{state.retryable && !state.pending && <button onClick={() => void retryReaderChat(paper.id)}><RotateCw size={13} />重试</button>}</div>}
     </div>
@@ -115,7 +144,7 @@ export default function ReaderChat({ paper, onClose }: { paper: Paper; onClose: 
       <div className="reader-ai-compose-actions"><span>Enter 发送 · Shift+Enter 换行</span>
         {state.pending ? <button type="button" className="reader-ai-send" aria-label="停止生成" disabled={state.stopping} onClick={() => void stopReaderChat(paper.id)}><Square size={13} />停止</button>
           : <button type="submit" className="reader-ai-send" aria-label="发送" disabled={!canSend}><Send size={14} />发送</button>}</div>
-      <p className="reader-ai-note">可读取当前论文资料并发送给模型 · 对话自动保存到资料文件夹</p>
+      <p className="reader-ai-note">资料与摘要会发送到当前模型 · 自动摘要可能增加 API 调用 · 对话保存在资料文件夹</p>
     </form>
     {settings && createPortal(<ModelSettingsDialog config={config} loadError={configError} onClose={() => { setSettings(false); requestAnimationFrame(() => input.current?.focus()); }}
       onSaved={next => { setConfig(next); setConfigError(''); }} />, window.document.body)}

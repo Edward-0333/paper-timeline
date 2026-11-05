@@ -5,6 +5,7 @@ export interface ModelProfile {
   model: string;
   hasApiKey: boolean;
   updatedAt: string;
+  contextWindowTokens?: number;
 }
 export interface ModelConfiguration extends Omit<ModelProfile, 'id' | 'updatedAt'> {
   configured: boolean;
@@ -21,6 +22,7 @@ export interface ModelConfigurationInput {
   /** Empty/omitted preserves the existing key only when the API address is unchanged. */
   apiKey?: string;
   withoutApiKey: boolean;
+  contextWindowTokens?: number;
 }
 export interface ModelConnectionResult {
   ok: boolean;

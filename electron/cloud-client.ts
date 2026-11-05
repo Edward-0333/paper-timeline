@@ -1,11 +1,12 @@
 import { mkdir, lstat, readFile, writeFile, rename, copyFile, unlink } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { Paper } from '../shared/types';
-import type { CloudStatus, CloudUser, CloudOverview, CloudBinding, CloudReview, LegacyMonitor } from '../shared/cloud';
+import type { CloudStatus, CloudUser, CloudOverview, CloudBinding, CloudReview, LegacyMonitor, CloudFailure, CloudStage, CloudProbe } from '../shared/cloud';
 import type { CitationMonitorState, CitationRecord, CitationSnapshot } from '../shared/citation-monitor';
-import { citationSeed, readCitationSnapshot, writeCitationSnapshot } from './citation-monitor';
+import { citationSeed, citationDirectory, CitationFileError, readCitationSnapshot, writeCitationSnapshot } from './citation-monitor';
 import { mergeCitations, seedKey } from './citation-data';
+import { CitationDataError, normalizeCitationRecords } from './citation-validation';
 
 type Credential = { server: string; user: CloudUser; token: string };
 interface SyncStore {
@@ -38,12 +39,11 @@ async function plain(path: string, directory = false) {
   try { const s = await lstat(path); if (s.isSymbolicLink() || (directory ? !s.isDirectory() : !s.isFile())) throw new Error('同步存储不能使用文件链接'); }
   catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e; }
 }
-export function validateRecords(records: unknown): asserts records is CitationRecord[] {
-  if (!Array.isArray(records) || records.length > 200 || records.some(r => !r || !/^[a-f0-9]{64}$/.test(r.id)
-    || !['title', 'doi', 'arxivId', 'abstract', 'venue', 'url', 'publicationDate', 'firstSeenAt', 'lastSeenAt'].every(k => typeof r[k] === 'string')
-    || !Array.isArray(r.authors) || r.authors.some((a: unknown) => typeof a !== 'string')
-    || !Array.isArray(r.sources) || r.sources.some((s: any) => !['openalex', 'semantic_scholar'].includes(s.provider) || typeof s.id !== 'string')))
-    throw new Error('服务器引用数据格式异常，未推进同步进度');
+export function validateRecords(records: unknown): CitationRecord[] {
+  return normalizeCitationRecords(records, 200);
+}
+class CloudRequestError extends Error {
+  constructor(readonly kind: 'network' | 'authentication' | 'server' | 'protocol', message: string) { super(message); }
 }
 
 /** No bibliographic network access: this client only talks to the chosen account server. */
@@ -53,6 +53,10 @@ export class CloudClient {
   private states = new Map<string, CitationMonitorState>();
   private connected = false;
   private error?: string;
+  private failure?: CloudFailure;
+  private lastConnectedAt?: string;
+  private stage: CloudStage = 'authentication';
+  private syncPaper?: Paper;
   private reconciliationSupported?: boolean;
   private paused = true;
   private timer?: ReturnType<typeof setInterval>;
@@ -96,7 +100,22 @@ export class CloudClient {
       pending: papers.filter(p => this.pending(p)).length,
       legacyPending: papers.filter(p => p.citationMonitoring && !p.citationSubscription).length,
       lastSyncAt: this.store.lastSyncAt, newCitations: this.store.newCitations, overview: this.store.overview,
-      reconciliationSupported: this.reconciliationSupported, error: this.error });
+      reconciliationSupported: this.reconciliationSupported, error: this.error, failure: this.failure, lastConnectedAt: this.lastConnectedAt });
+  }
+  /** A read-only account probe: no sync, credential changes, cursor writes or subscriptions. */
+  async probe(signal?: AbortSignal): Promise<CloudProbe> {
+    signal?.throwIfAborted();
+    if (!this.credential) return { state: 'not_signed_in', message: '本机没有可用登录会话，请在首页登录。' };
+    const credential = this.credential;
+    try {
+      const me = await this.request(credential.server, 'me', credential.token, undefined, signal);
+      if (me?.user?.id !== credential.user.id) return { state: 'unauthorized', checkedAt: new Date().toISOString(), message: '服务器返回的账户与本库不匹配。' };
+      return { state: 'authenticated', checkedAt: new Date().toISOString(), message: '服务器可访问，账户验证成功；不代表引用同步已完成。' };
+    } catch (error) {
+      signal?.throwIfAborted();
+      return { state: error instanceof CloudRequestError ? ({ network: 'unreachable', authentication: 'unauthorized', server: 'server_error', protocol: 'protocol_error' } as const)[error.kind] : 'protocol_error',
+        checkedAt: new Date().toISOString(), message: error instanceof CloudRequestError ? error.message : '服务器账户检查失败。' };
+    }
   }
   private pending(p: Paper) { return !!p.citationSubscription && p.citationSubscription.revision > (this.store.acknowledgements[p.id] ?? 0); }
   state(id: string): CitationMonitorState | undefined { return structuredClone(this.states.get(id)); }
@@ -184,7 +203,7 @@ export class CloudClient {
       // Save the account binding before the OS-encrypted credential. Never store the password.
       this.store.account = { server, user: credential.user };
       await this.save(); await this.options.credentials.write(credential);
-      this.credential = credential; this.connected = true; this.error = undefined;
+      this.credential = credential; this.connected = true; this.error = undefined; this.failure = undefined; this.lastConnectedAt = new Date().toISOString();
     } finally { this.resume(); this.options.changed(); }
     return this.status();
   }
@@ -193,43 +212,62 @@ export class CloudClient {
     let failed = false;
     if (this.credential) await this.request(this.credential.server, 'logout', this.credential.token, {}).catch(() => { failed = true; });
     await this.options.credentials.clear(); this.credential = null; this.connected = false;
+    this.failure = undefined;
     this.error = failed ? '本机已退出；服务器未连接，远程会话尚未撤销，可在网页服务概览中撤销。云端监控继续运行。' : undefined;
     this.resume(); this.options.changed(); return this.status();
   }
   private async request(server: string, path: string, token: string, body?: unknown, signal?: AbortSignal): Promise<any> {
-    const response = await this.options.fetch(server + '/api/desktop/v1/' + path, {
-      method: body === undefined ? 'GET' : 'POST', redirect: 'error',
-      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000),
-      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    });
-    if (response.status === 401) throw Object.assign(new Error('登录失效或账号密码错误，请重新登录'), { unauthorized: true });
-    const text = await response.text();
-    if (text.length > 20 * 1024 * 1024) throw new Error('服务器响应过大');
-    let value; try { value = JSON.parse(text); } catch { throw new Error('服务器未提供兼容的引用同步 API'); }
-    if (!response.ok) throw new Error(typeof value.detail === 'string' ? value.detail : `同步请求失败（HTTP ${response.status}）`);
+    let response: Response, text: string;
+    try {
+      response = await this.options.fetch(server + '/api/desktop/v1/' + path, {
+        method: body === undefined ? 'GET' : 'POST', redirect: 'error',
+        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000),
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      });
+      text = await response.text();
+    } catch {
+      signal?.throwIfAborted();
+      throw new CloudRequestError('network', '无法连接云端服务器或请求超时，请检查服务器地址、网络与证书。');
+    }
+    if (response.status === 401) throw new CloudRequestError('authentication', '登录失效或账号密码错误，请重新登录');
+    if (!response.ok) throw new CloudRequestError('server', `服务器请求失败（HTTP ${response.status}），请检查服务端状态或权限。`);
+    if (text.length > 20 * 1024 * 1024) throw new CloudRequestError('protocol', '服务器响应过大');
+    let value; try { value = JSON.parse(text); } catch { throw new CloudRequestError('protocol', '服务器未提供兼容的引用同步 API'); }
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new CloudRequestError('protocol', '服务器响应格式异常');
     return value;
   }
   async sync() {
     if (this.running) { await this.running; return this.status(); }
     if (this.paused || !this.credential) return this.status();
     const credential = this.credential, controller = new AbortController();
+    this.stage = 'authentication'; this.syncPaper = undefined;
     this.controller = controller;
     this.running = this.synchronize(credential, controller.signal).catch(async e => {
       if (controller.signal.aborted) return;
-      this.connected = false; this.error = e instanceof Error ? e.message : '同步失败';
-      if (e?.unauthorized) { this.credential = null; await this.options.credentials.clear(); }
+      const kind: CloudFailure['kind'] = e instanceof CloudRequestError ? e.kind : e instanceof CitationFileError ? 'local_data'
+        : e instanceof CitationDataError ? 'protocol' : e?.code || this.stage === 'save' ? 'local_storage' : 'sync';
+      if (kind === 'network' || kind === 'authentication' || this.stage === 'authentication') this.connected = false;
+      this.error = kind === 'local_storage' ? '本地同步数据无法保存，请检查磁盘空间和访问权限。' : e instanceof Error ? e.message : '同步失败';
+      const paper = this.syncPaper;
+      this.failure = { kind, stage: this.stage, message: this.error, occurredAt: new Date().toISOString(),
+        ...(paper ? { paperId: paper.id, title: paper.title.slice(0, 300),
+          ...(kind === 'local_data' ? { file: relative(this.options.directory, join(citationDirectory(this.options.directory, paper.id, paper.storageFolder), 'citations.json')).replace(/\\/g, '/') } : {}) } : {}),
+        ...(e instanceof CitationDataError ? { field: e.field } : {}) };
+      if (kind === 'authentication') { this.credential = null; await this.options.credentials.clear(); }
     }).finally(() => { this.running = undefined; this.controller = undefined; this.options.changed(); });
     this.options.changed(); await this.running; return this.status();
   }
   private async synchronize(credential: Credential, signal: AbortSignal) {
     const call = (path: string, body?: unknown) => this.request(credential.server, path, credential.token, body, signal);
     const me = await call('me');
-    if (me.user?.id !== credential.user.id) throw new Error('服务器账户不匹配，已停止同步');
-    this.connected = true; this.error = undefined;
+    if (me.user?.id !== credential.user.id) throw new CloudRequestError('authentication', '服务器账户不匹配，已停止同步');
+    this.connected = true; this.error = undefined; this.failure = undefined; this.lastConnectedAt = new Date().toISOString();
+    this.stage = 'subscriptions';
     this.reconciliationSupported = Array.isArray(me.features) && me.features.includes('monitor-reconciliation-v1');
     for (const p of this.options.papers()) {
       if (!this.pending(p) || p.citationSubscription?.account !== accountKey(credential)) continue;
+      this.syncPaper = p;
       if ((p.citationSubscription.paperId || p.citationSubscription.retireLegacy) && !this.reconciliationSupported) throw new Error('当前订阅需要新版服务器支持监控对账，请先升级服务器');
       const ack = await call('bindings', { library: this.store.libraryId, localId: p.id, revision: p.citationSubscription.revision,
         enabled: p.citationMonitoring === true, seed: citationSeed(p),
@@ -237,12 +275,22 @@ export class CloudClient {
         ...(p.citationSubscription.retireLegacy && p.citationMonitoring ? { retireLegacy: p.citationSubscription.retireLegacy } : {}) });
       signal.throwIfAborted();
       if (ack.revision !== p.citationSubscription.revision || ack.enabled !== (p.citationMonitoring === true)) throw new Error('服务器订阅版本较新，请勿在两台电脑同时操作同一个文献库副本');
-      this.store.acknowledgements[p.id] = ack.revision; await this.save();
+      this.stage = 'save';
+      const previous = this.store.acknowledgements[p.id];
+      this.store.acknowledgements[p.id] = ack.revision;
+      try { await this.save(); } catch (error) {
+        if (previous === undefined) delete this.store.acknowledgements[p.id]; else this.store.acknowledgements[p.id] = previous;
+        throw error;
+      }
+      this.stage = 'subscriptions';
     }
+    this.syncPaper = undefined;
     const response = await call('bindings?library=' + encodeURIComponent(this.store.libraryId));
-    if (!Array.isArray(response.bindings)) throw new Error('服务器订阅格式异常');
+    if (!Array.isArray(response.bindings)) throw new CloudRequestError('protocol', '服务器订阅格式异常');
     const before: CitationRecord[] = [], incoming: CitationRecord[] = [];
+    this.stage = 'local_citations';
     for (const p of this.options.papers()) {
+      signal.throwIfAborted(); this.syncPaper = p;
       const old = await readCitationSnapshot(this.options.directory, p.id, p.storageFolder);
       if (old) before.push(...old.citations);
     }
@@ -251,40 +299,52 @@ export class CloudClient {
         && p.citationSubscription.revision === b.revision);
       const p = current();
       if (!p || !b.enabled) continue;
+      this.syncPaper = p; this.stage = 'local_citations';
       this.states.set(p.id, { ...this.states.get(p.id), count: this.states.get(p.id)?.count ?? 0, status: b.status, lastAttemptAt: b.lastAttemptAt || undefined,
         lastSuccessAt: b.lastSuccessAt || undefined, nextCheckAt: b.nextCheckAt || undefined });
       if (!b.batch || this.store.cursors[p.id] === b.batch) continue;
       let snapshot = await readCitationSnapshot(this.options.directory, p.id, p.storageFolder);
-      if (snapshot?.citations.length && seedKey(snapshot.seed) !== seedKey(citationSeed(p))) throw new Error('论文标识与历史引用不一致，请先核对元数据');
+      if (snapshot?.citations.length && seedKey(snapshot.seed) !== seedKey(citationSeed(p))) throw new CitationFileError(p.id, 'seed', '论文标识与历史引用不一致，请先核对元数据');
       let cursor: string | null = null, revision = 0;
       const visited = new Set<string>();
       do {
+        this.stage = 'download';
         const page = await call(`bindings/${b.id}/results?library=${this.store.libraryId}` + (cursor ? '&cursor=' + encodeURIComponent(cursor) : ''));
         signal.throwIfAborted();
         if (!current()) break;
-        validateRecords(page.citations);
+        const citations = validateRecords(page.citations);
         if (!Number.isSafeInteger(page.batch) || page.batch <= 0 || (revision && revision !== page.batch) || !Array.isArray(page.providers)
-          || (page.next !== null && typeof page.next !== 'string')) throw new Error('服务器分页版本异常');
+          || (page.next !== null && typeof page.next !== 'string')) throw new CloudRequestError('protocol', '服务器分页版本异常');
         revision = page.batch;
         const at = new Date().toISOString();
         snapshot = { version: 1, seed: citationSeed(p), providers: page.providers, lastAttemptAt: page.lastAttemptAt || '',
           lastSuccessAt: page.lastSuccessAt || snapshot?.lastSuccessAt, nextCheckAt: page.nextCheckAt || '',
-          citations: mergeCitations(snapshot?.citations ?? [], page.citations, at) } satisfies CitationSnapshot;
+          citations: mergeCitations(snapshot?.citations ?? [], citations, at) } satisfies CitationSnapshot;
+        this.stage = 'save';
         await writeCitationSnapshot(this.options.directory, snapshot, p.storageFolder);
-        incoming.push(...page.citations);
+        this.stage = 'download';
+        incoming.push(...citations);
         this.states.set(p.id, { status: page.status, count: snapshot.citations.length, lastAttemptAt: snapshot.lastAttemptAt,
           lastSuccessAt: snapshot.lastSuccessAt, nextCheckAt: snapshot.nextCheckAt,
           message: page.providers.filter((r: any) => r.status !== 'success').map((r: any) => r.provider + '：' + r.message).join('；') });
         cursor = page.next;
-        if (cursor) { if (visited.has(cursor)) throw new Error('分页游标重复'); visited.add(cursor); }
+        if (cursor) { if (visited.has(cursor)) throw new CloudRequestError('protocol', '分页游标重复'); visited.add(cursor); }
         this.options.changed();
       } while (cursor);
-      if (current() && !cursor) { this.store.cursors[p.id] = revision; await this.save(); }
+      if (current() && !cursor) {
+        this.stage = 'save'; const previous = this.store.cursors[p.id]; this.store.cursors[p.id] = revision;
+        try { await this.save(); } catch (error) {
+          if (previous === undefined) delete this.store.cursors[p.id]; else this.store.cursors[p.id] = previous;
+          throw error;
+        }
+      }
     }
     signal.throwIfAborted();
+    this.syncPaper = undefined; this.stage = 'save';
     const uniqueBefore = mergeCitations([], before, '');
+    const previous = { newCitations: this.store.newCitations, overview: this.store.overview, lastSyncAt: this.store.lastSyncAt };
     this.store.newCitations = Math.max(0, mergeCitations(uniqueBefore, incoming, '').length - uniqueBefore.length);
     this.store.overview = response.overview; this.store.lastSyncAt = new Date().toISOString();
-    await this.save();
+    try { await this.save(); } catch (error) { Object.assign(this.store, previous); throw error; }
   }
 }

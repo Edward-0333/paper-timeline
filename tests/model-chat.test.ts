@@ -89,7 +89,7 @@ test('only user and assistant text and bounded safe request IDs are accepted; in
     { ...good, messages: [{ role: 'assistant', content: 'not a final question' }] }, { ...good, messages: [{ role: 'user', content: ' ' }] },
     { ...good, messages: [{ role: 'user', content: 'hello\x00world' }] }, { ...good, messages: [{ role: 'user', content: 'x'.repeat(limit.messageCharacters + 1) }] },
     { ...good, messages: Array.from({ length: limit.messages + 1 }, () => ({ role: 'user', content: 'x' })) },
-    { ...good, messages: Array.from({ length: 6 }, () => ({ role: 'user', content: 'x'.repeat(20000) })) },
+    { ...good, messages: Array.from({ length: Math.floor(limit.totalCharacters / limit.messageCharacters) + 1 }, () => ({ role: 'user', content: 'x'.repeat(limit.messageCharacters) })) },
     { ...good, messages: [{ role: 'user', content: 'hello', attachment: 'ignored?' }] },
   ];
   for (const input of bad) {
@@ -200,7 +200,7 @@ test('saved configuration is private and required; chat never changes credential
 });
 
 test('saved chat allows four independent requests, rejects duplicate IDs and isolates cancellation', async () => {
-  const { store } = await fixture(); await store.save(saved);
+  const { store } = await fixture(id => Promise.resolve({ ...context, paperId: id })); await store.save(saved);
   const started: string[] = []; const finish = new Map<string, () => void>();
   const fetcher = mock((_url, init) => {
     const content = JSON.parse(String(init.body)).messages.at(-1).content as string; started.push(content);
@@ -209,9 +209,10 @@ test('saved chat allows four independent requests, rejects duplicate IDs and iso
       init.signal!.addEventListener('abort', () => reject(new Error('PRIVATE-ERROR ' + target.apiKey)), { once: true });
     });
   });
-  const requests = Array.from({ length: 4 }, (_, i) => request('并发' + i));
+  const requests = Array.from({ length: 4 }, (_, i) => ({ ...request('并发' + i), paperId: String(i).repeat(64) }));
   const pending = requests.map(input => store.chat(input, fetcher));
   const duplicate = await store.chat(requests[0], fetcher); safe(duplicate, false); assert.match(duplicate.message, /正在/);
+  const samePaper = await store.chat({ ...requests[0], requestId: randomUUID() }, fetcher); safe(samePaper, false); assert.match(samePaper.message, /这篇论文正在/);
   const busy = await store.chat(request(), fetcher); safe(busy, false); assert.match(busy.message, /过多/);
   while (started.length < 4) await new Promise(resolve => setTimeout(resolve, 5));
   store.cancelChat(requests[1].requestId); const stopped = await pending[1]; safe(stopped, false); assert.equal(stopped.cancelled, true);

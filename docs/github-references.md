@@ -1,5 +1,7 @@
 # GitHub 参考仓库与采用记录
 
+2026-11-05 采用范围补充：下表 Vercel AI SDK 的工具循环、取消和通用摘要执行器也用于首页「文献库助手」。新增的全库查询、具体变更确认、分类/元数据/监控管理、已有模型配置编辑确认和密钥隔离流程由本项目实现，没有从其他 Agent 仓库复制管理代码，也没有引入 PaperQA 运行时。实现见 `electron/library-agent-tools.ts`、`electron/library-chat-service.ts` 和 [文献库助手说明](library-assistant-guide.md)。
+
 整理日期：2026-10-23。
 
 本表依据当前对话中能够确认的项目、功能说明、第三方声明以及本地依赖补录。记录用途和采用情况，避免把讨论过的项目误认为已经集成。此前没有统一登记选型过程，因此不把无法确认的历史浏览项目补写为已参考。
@@ -12,14 +14,18 @@
 | [AIHOT](https://github.com/KKKKhazix/AIHOT) | 讨论论文信息过多时的自动搜集、筛选、分析和摘要流程 | 设计讨论参考；目前未确认引入其代码或运行时，不表示已经实现自动精选日报 | 本表补录；来自此前用户指定的参考项目 |
 | [EmbedPDF](https://github.com/embedpdf/embed-pdf-viewer) | 内置 PDF 阅读、高亮、下划线、评论及阅读位置保存 | 已集成；直接依赖 `@embedpdf/react-pdf-viewer@2.15.1`，阅读资源随软件提供 | [PDF 阅读器说明](pdf-reader-guide.md)、[第三方声明](../THIRD_PARTY_NOTICES.md) |
 | [MinerU](https://github.com/opendatalab/MinerU) | 将论文 PDF 转为 Markdown、结构化数据和图片，供阅读 Agent 查阅 | 已接入本机调用；已验证版本 4.0.12。环境及模型独立安装，不随桌面程序打包 | [MinerU 说明](mineru-guide.md) |
-| [Vercel AI SDK](https://github.com/vercel/ai) | 模型适配、工具调用循环、停止和执行进度 | 已集成 `ai@7.0.150`、`@ai-sdk/openai-compatible@3.0.77` 和 `@ai-sdk/openai@4.0.101`。GPT-6 论文工具经过 Responses 适配器执行 | [模型配置与论文 Agent](model-api-guide.md)、[第三方声明](../THIRD_PARTY_NOTICES.md) |
+| [Vercel AI SDK](https://github.com/vercel/ai) | 模型适配、工具调用循环、停止和执行进度；2026-11-05 参考 `prepareStep` 与 `pruneMessages` 的上下文管理设计 | 已集成 `ai@7.0.150`、`@ai-sdk/openai-compatible@3.0.77` 和 `@ai-sdk/openai@4.0.101`。GPT-6 论文工具经过 Responses 适配器执行；2026-11-05 另外采用 openai.tools.webSearch() 和 maxToolCalls，为文献库助手提供可选的 OpenAI 内置搜索，复用当前模型配置；行内引用、来源归档和次数控制由本项目实现。已用 SDK 的 `generateText` 实现软件管理的分批摘要，并在 `prepareStep` 按预算精简较早工具结果、保留来源及调用配对；裁剪规则由本项目实现，未直接调用 `pruneMessages`。完整聊天与 `chat-context.json` 摘要分开保存，支持跨模型复用 | [模型配置与论文 Agent](model-api-guide.md)、[第三方声明](../THIRD_PARTY_NOTICES.md)、[上游上下文管理](https://ai-sdk.dev/docs/agents/loop-control#context-management)、[上游消息裁剪](https://ai-sdk.dev/docs/reference/ai-sdk-ui/prune-messages) |
 | [PaperQA](https://github.com/Future-House/paper-qa) | 论文问答中的资料检索、证据收集和来源引用思路 | 仅作设计参考；未引入其代码或运行时。不能把当前论文 Agent 描述为基于 PaperQA 运行 | [模型配置与论文 Agent](model-api-guide.md)、[第三方声明](../THIRD_PARTY_NOTICES.md) |
+| [Tavily JavaScript SDK](https://github.com/tavily-ai/tavily-js) | 2026-11-05 查阅官方搜索接口、结果标题/链接/正文摘要格式与搜索和正文提取的区分 | 已接入 Tavily Search HTTP API，未安装此 SDK，也未采用其无密钥模式；查询参数、加密配置、网页读取、限额和来源展示由本项目实现 | [文献库助手联网搜索](library-assistant-guide.md)、`electron/web-search-settings.ts`、`electron/library-web-tools.ts`、[官方 Search API](https://docs.tavily.com/documentation/api-reference/endpoint/search) |
+| [Tavily MCP](https://github.com/tavily-ai/tavily-mcp)、[Tavily Power](https://github.com/tavily-ai/tavily-power) | 2026-11-05 调研搜索结果中的官方工具参数与鉴权示例 | 仅接口资料调研；未引入 MCP 服务、插件或仓库代码，实际采用上述直接 HTTP 接口 | 本表；最终接口依据官方 API 文档 |
 | [Streamdown](https://github.com/vercel/streamdown) | AI 回复和笔记的 Markdown 渲染、表格、公式与代码显示 | 已集成；`streamdown@2.7.1`，同时使用 CJK、代码及数学插件。AI 回复、笔记阅读和编辑预览均使用它 | [模型配置与论文 Agent](model-api-guide.md)、[Markdown 笔记说明](markdown-note-guide.md) |
 | [Vditor](https://github.com/Vanessa219/vditor) | 软件内的 Markdown 笔记编辑器选型 | 已集成 `vditor@4.0.1`；当前采用源码编辑和格式工具栏，配合 Streamdown 安全预览；并未启用它的全部编辑模式和在线功能 | [Markdown 笔记说明](markdown-note-guide.md)、[第三方声明](../THIRD_PARTY_NOTICES.md) |
 | [Milkdown](https://github.com/Milkdown/milkdown) | 所见即所得 Markdown 编辑框架，与 Vditor 比较 | 已讨论的候选方案，当前未采用；笔记编辑选择 Vditor | 本表补录；来自 Markdown 编辑器选型讨论 |
 | [react-markdown](https://github.com/remarkjs/react-markdown) | React 中的 Markdown 阅读与渲染选型 | 已讨论的渲染器候选；本项目没有单独接入其显示入口，当前显示使用 Streamdown | 本表补录；来自 Markdown 渲染器选型讨论 |
 
 `Paper_monitoring` 与此前写作 `paper_monitoring` 的链接指同一 GitHub 仓库，合并记录，不计为两个项目。
+
+2026-11-05 上下文核查补充：已安装的 AI SDK OpenAI Responses 适配器提供 `contextManagement` / `compactionTrigger` 服务端压缩选项，具体依赖模型与接口支持；本次仅将其作为方案比较参考，Paper Timeline 未配置这些选项，也不保存服务商专属压缩状态，实际采用上述通用文字摘要。参见 [AI SDK Compaction](https://ai-sdk.dev/providers/ai-sdk-providers/openai#compaction) 与 [OpenAI 官方压缩说明](https://developers.openai.com/api/docs/guides/compaction#server-side-compaction)。
 
 ## 已使用组件的补充来源
 

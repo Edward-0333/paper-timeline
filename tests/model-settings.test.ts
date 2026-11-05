@@ -6,6 +6,21 @@ import { join, resolve } from 'node:path';
 import { ModelSettings, type ModelCipher } from '../electron/model-settings';
 
 const input = { name: '论文模型', baseUrl: 'https://models.example.test/v1/', model: 'research-model', apiKey: 'fixture-secret-do-not-return', withoutApiKey: false };
+test('context capacities are per profile, validated and survive edits and model switches', async () => {
+  const { store, directory, cipher } = await fixture();
+  const first = await store.save({ ...input, contextWindowTokens: 32768 });
+  const second = await store.save({ ...input, profileId: null, name: 'Smaller', model: 'smaller-model', contextWindowTokens: 8192 });
+  assert.equal(second.contextWindowTokens, 8192);
+  await store.select(first.activeId!);
+  assert.equal((await store.status()).contextWindowTokens, 32768);
+  await store.save({ ...input, profileId: first.activeId, apiKey: '', name: 'Edited' });
+  assert.equal((await new ModelSettings(directory, cipher).status()).contextWindowTokens, 32768);
+  const before = await readFile(store.file);
+  for (const value of [0, 8191, 2000001, 12345.6, NaN, '32768', null]) {
+    await assert.rejects(store.save({ ...input, contextWindowTokens: value as number }), /上下文/);
+    assert.deepEqual(await readFile(store.file), before);
+  }
+});
 async function fixture() {
   await mkdir('.test-data', { recursive: true }); const root = await mkdtemp(resolve('.test-data/model-settings-'));
   const key = randomBytes(32);

@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { lstatSync } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile, rename, copyFile, stat, unlink, lstat } from 'node:fs/promises';
@@ -20,6 +21,8 @@ import { citationSeed, citationDirectory, readCitationSnapshot, writeCitationSna
 import type { CitationPage } from '../shared/citation-monitor';
 import { citationLibraryArxiv, citationLibraryDoi, createCitationLibraryIndex } from '../shared/citation-library';
 import { CloudClient, type CloudOptions } from './cloud-client';
+import { diagnoseCloud, type CloudDiagnosticOptions } from './cloud-diagnostics';
+import type { CloudStatus } from '../shared/cloud';
 import { readerPdf, readerHash, readReaderState, writeReaderState } from './reader';
 import type { ReaderUpdate } from '../shared/reader';
 import { assertRegularFile, assertSafeDirectory, assertSafeDirectorySync, ensurePaperDirectory, paperStoragePaths, storageFolderName, validateStorageFolder, writeNewPaperFile } from './paper-storage';
@@ -143,6 +146,7 @@ export class Library extends EventEmitter {
   private folders: LibraryFolder[] = [];
   private timelines: TimelineTrack[] = defaultTimelines();
   private organization: Promise<unknown> = Promise.resolve();
+  private mutationGuard = new AsyncLocalStorage<() => void>();
   private queue: string[] = [];
   private processing = false;
   private writes: Promise<unknown> = Promise.resolve();
@@ -169,7 +173,12 @@ export class Library extends EventEmitter {
     return this.citationMonitor;
   }
   async stopCitationMonitoring() { await this.citationMonitor?.pause(); }
-  cloudStatus() { return this.citationMonitor?.status() ?? { signedIn: false, connected: false, syncing: false, pending: 0, legacyPending: 0, newCitations: 0 }; }
+  cloudStatus(): CloudStatus { return this.citationMonitor?.status() ?? { signedIn: false, connected: false, syncing: false, pending: 0, legacyPending: 0, newCitations: 0 }; }
+  cloudDiagnose(options: CloudDiagnosticOptions = {}, signal?: AbortSignal) {
+    const cloud = this.citationMonitor;
+    return diagnoseCloud(this.directory, structuredClone(this.papers), this.cloudStatus(),
+      async signal => cloud ? cloud.probe(signal) : { state: 'not_signed_in', message: '云端服务未启动或尚未登录。' }, options, signal);
+  }
   cloudLogin(server: string, username: string, password: string) {
     if (!this.citationMonitor) throw new Error('云端服务未启动');
     return this.citationMonitor.login(server, username, password);
@@ -547,9 +556,18 @@ export class Library extends EventEmitter {
   }
   private organize<T>(fn: () => Promise<T>): Promise<T> {
     if (this.storageLocked) return Promise.reject(new Error('正在切换文献库，请稍候'));
-    const operation = this.organization.catch(() => {}).then(fn);
+    const guard = this.mutationGuard.getStore();
+    const operation = this.organization.catch(() => {}).then(() => {
+      guard?.();
+      // The guard belongs to this queued action, not event listeners/background work started by it.
+      return this.mutationGuard.exit(fn);
+    });
     this.organization = operation;
     return operation;
+  }
+  /** Desktop Agent approval checks run after queued edits, immediately before the requested mutation. */
+  withMutationGuard<T>(guard: () => void, operation: () => Promise<T>): Promise<T> {
+    return this.mutationGuard.run(guard, operation);
   }
   private folder(id: string) {
     const folder = this.folders.find(f => f.id === id);
@@ -750,21 +768,32 @@ export class Library extends EventEmitter {
     this.queue.push(id); this.kick();
   }
   async saveMetadata(id: string, metadata: PaperMetadata) {
-    if (this.storageLocked) throw new Error('正在切换文献库，请稍候');
-    const paper = this.get(id);
-    if (['queued', 'extracting', 'searching'].includes(paper.status)) throw new Error('请等待检索完成后再修改');
-    if (!metadata || typeof metadata.title !== 'string' || !metadata.title.trim() || metadata.title.length > 2000) throw new Error('请输入有效标题');
-    if (!Array.isArray(metadata.authors) || metadata.authors.some(a => typeof a !== 'string' || a.length > 500)) throw new Error('作者格式不正确');
-    if (metadata.year !== null && (!Number.isInteger(metadata.year) || metadata.year < 1000 || metadata.year > 2200)) throw new Error('年份格式不正确');
-    const publicationDate = metadata.publicationDate === undefined ? dateFromParts([metadata.year]) : metadata.publicationDate;
-    if (publicationDate !== '' && !parsePublicationDate(publicationDate)) throw new Error('发表日期格式不正确，请填写年份、年-月或年-月-日，例如 2025-04-02');
-    const year = publicationDate ? Number(publicationDate.slice(0, 4)) : null;
-    for (const field of ['venue', 'doi', 'arxivId', 'abstract', 'url'] as const) if (typeof metadata[field] !== 'string' || metadata[field].length > 30000) throw new Error('元数据格式不正确');
-    const doi = normalizeDoi(metadata.doi);
-    if (doi && !/^10\.\d{4,9}\/\S+$/i.test(doi)) throw new Error('DOI 格式不正确，应类似 10.1234/example');
-    const url = doi ? `https://doi.org/${doi}` : metadata.arxivId ? `https://arxiv.org/abs/${metadata.arxivId}` : '';
-    const clean: PaperMetadata = { title: cleanText(metadata.title), authors: metadata.authors.map(cleanText).filter(Boolean), year, publicationDate, venue: metadata.venue, doi, arxivId: metadata.arxivId, abstract: metadata.abstract, url, source: '手动', matchMethod: '用户已核对', retrievedAt: new Date().toISOString() };
-    await this.update(id, { ...clean, abstractSource: '手动', status: 'matched', message: '已保存核对后的元数据' });
+    return this.organize(async () => {
+      if (this.storageLocked) throw new Error('正在切换文献库，请稍候');
+      const paper = this.get(id);
+      if (['queued', 'extracting', 'searching'].includes(paper.status)) throw new Error('请等待检索完成后再修改');
+      if (!metadata || typeof metadata.title !== 'string' || !metadata.title.trim() || metadata.title.length > 2000) throw new Error('请输入有效标题');
+      if (!Array.isArray(metadata.authors) || metadata.authors.some(a => typeof a !== 'string' || a.length > 500)) throw new Error('作者格式不正确');
+      if (metadata.year !== null && (!Number.isInteger(metadata.year) || metadata.year < 1000 || metadata.year > 2200)) throw new Error('年份格式不正确');
+      const publicationDate = metadata.publicationDate === undefined ? dateFromParts([metadata.year]) : metadata.publicationDate;
+      if (publicationDate !== '' && !parsePublicationDate(publicationDate)) throw new Error('发表日期格式不正确，请填写年份、年-月或年-月-日，例如 2025-04-02');
+      const year = publicationDate ? Number(publicationDate.slice(0, 4)) : null;
+      for (const field of ['venue', 'doi', 'arxivId', 'abstract', 'url'] as const) if (typeof metadata[field] !== 'string' || metadata[field].length > 30000) throw new Error('元数据格式不正确');
+      const doi = normalizeDoi(metadata.doi);
+      if (doi && !/^10\.\d{4,9}\/\S+$/i.test(doi)) throw new Error('DOI 格式不正确，应类似 10.1234/example');
+      const url = doi ? `https://doi.org/${doi}` : metadata.arxivId ? `https://arxiv.org/abs/${metadata.arxivId}` : '';
+      const clean: PaperMetadata = { title: cleanText(metadata.title), authors: metadata.authors.map(cleanText).filter(Boolean), year, publicationDate, venue: metadata.venue, doi, arxivId: metadata.arxivId, abstract: metadata.abstract, url, source: '手动', matchMethod: '用户已核对', retrievedAt: new Date().toISOString() };
+      const changes: Partial<Paper> = { ...clean, abstractSource: '手动', status: 'matched', message: '已保存核对后的元数据' };
+      const previous = Object.fromEntries(Object.keys(changes).map(key => [key, paper[key as keyof Paper]]));
+      try { await this.update(id, changes); }
+      catch (error) {
+        for (const [key, value] of Object.entries(previous)) {
+          if (value === undefined) delete (paper as unknown as Record<string, unknown>)[key];
+          else (paper as unknown as Record<string, unknown>)[key] = value;
+        }
+        throw error;
+      }
+    });
   }
   private kick() { void this.process().catch(error => { this.emit('storage-error', error); }); }
   private async process() {
